@@ -2,6 +2,10 @@ const { v4: uuidv4 } = require('uuid');
 const mysql = require('mysql2/promise');
 const pool = require('../services/db');
 const validator = require('validator');
+const { encrypt } = require('../utils/cryptoHelper');
+const jwt = require("jsonwebtoken");
+const { hashPassword } = require("../utils/utilities");
+const bcrypt = require("bcrypt");
 
 
 //Create Account (first segment)
@@ -81,7 +85,7 @@ exports.create_account_first = async (req, res) => {
 
 
 
-
+// generates a token that will be used to update user profile
 exports.verifyOtp = async (req, res) => {
     const { phone_number, otp } = req.body;
   
@@ -111,11 +115,39 @@ exports.verifyOtp = async (req, res) => {
         'UPDATE users_account SET status = 1 WHERE phone_number = ?',
         [phone_number]
       );
+
+      // Get user details (for token payload)
+      const [userResult] = await pool.query(
+        'SELECT user_id, phone_number FROM users_account WHERE phone_number = ? LIMIT 1',
+        [phone_number]
+      );
   
-      return res.status(200).json({ success: "success", message: 'OTP verified and account activated' });
+      if (userResult.length === 0) {
+        return res.status(404).json({ success: "error", message: 'User not found after OTP verification' });
+      }
+  
+      const user = userResult[0];
+  
+      // Generate JWT token
+      const token = jwt.sign(
+        { user_id: user.id, phone_number: user.phone_number },
+        process.env.JWT_SECRET || "your_jwt_secret",
+        { expiresIn: "7d" } // token validity (7 days)
+      );
+  
+      // Return response with token
+      return res.status(200).json({
+        status: "success",
+        message: 'OTP verified and account activated',
+        token,
+        data: {
+          id: user.user_id,
+          phone_number: user.phone_number
+        }
+      });
     } catch (err) {
       console.error('Error verifying OTP:', err);
-      return res.status(500).json({ success: "error", message: 'Server error' });
+      return res.status(500).json({ status: "error", message: 'Server error' });
     }
 };
 
@@ -124,7 +156,26 @@ exports.verifyOtp = async (req, res) => {
 
 
 exports.updateUserProfile = async (req, res) => {
+
+  // validate JWT token
+    const authHeader = req.headers["authorization"];
+    console.log(process.env.JWT_SECRET, authHeader);
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ status: false, message: "Authorization token required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);//|| "your_jwt_secret" 
+    } catch (err) {
+      console.log(err);
+      return res.status(401).json({ status: false, message: "Invalid or expired token"+err });
+    }
+
     const {
+      user_id,
       phone_number,
       first_name,
       last_name,
@@ -132,11 +183,18 @@ exports.updateUserProfile = async (req, res) => {
       date_of_birth,
       business_name,
       business_address,
-      password
+      password,
+      security_question,
+      security_answer
     } = req.body;
   
     if (!phone_number) {
-      return res.status(400).json({ success: false, message: 'phone_number is required' });
+      return res.status(400).json({ status: false, message: 'phone_number is required' });
+    }
+
+    //  Ensure the token user_id matches the request user_id or phone_number
+    if (decoded.user_id !== user_id && decoded.phone_number !== phone_number) {
+      return res.status(403).json({ status: false, message: "You are not authorized to update this profile" });
     }
   
     try {
@@ -147,16 +205,16 @@ exports.updateUserProfile = async (req, res) => {
       );
   
       if (userResult.length === 0) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+        return res.status(404).json({ status: false, message: 'User not found' });
       }
   
       const { account_type, status } = userResult[0];
   
       // 2. Validate account status
       if (status === 0) {
-        return res.status(403).json({ success: false, message: 'Verify account first before profile update' });
+        return res.status(403).json({ status: false, message: 'Verify account first before profile update' });
       } else if (status !== 1) {
-        return res.status(403).json({ success: false, message: 'Unable to update account, contact administrator' });
+        return res.status(403).json({ status: false, message: 'Unable to update account, contact administrator' });
       }
   
       // 3. Validate password strength
@@ -170,7 +228,7 @@ exports.updateUserProfile = async (req, res) => {
   
       if (!isStrong) {
         return res.status(400).json({
-          success: false,
+          status: false,
           message:
             'Password must be at least 8 characters long and include uppercase, lowercase, number, and symbol.',
         });
@@ -178,48 +236,304 @@ exports.updateUserProfile = async (req, res) => {
   
       let updateQuery = '';
       let updateParams = [];
+      let hash_password = await hashPassword(password);
   
       // 4. Validate fields and prepare update
       if (account_type === 'USER') {
-        if (!first_name || !last_name || !email_address || !date_of_birth || !password) {
+        if (!first_name || !last_name || !email_address || !date_of_birth || !password || !security_question || !security_answer) {
           return res.status(400).json({ success: false, message: 'Missing required USER fields' });
         }
 
-        // ✅ Validate date_of_birth format: YYYY-MM-DD
+        // Validate date_of_birth format: YYYY-MM-DD
         const dobPattern = /^\d{4}-\d{2}-\d{2}$/;
         if (!dobPattern.test(date_of_birth) || !validator.isDate(date_of_birth, { format: 'YYYY-MM-DD', strictMode: true })) {
-            return res.status(400).json({ success: false, message: 'date_of_birth must be in format YYYY-MM-DD' });
+            return res.status(400).json({ status: false, message: 'date_of_birth must be in format YYYY-MM-DD' });
         }
   
         updateQuery = `
           UPDATE users_account
-          SET first_name = ?, last_name = ?, email_address = ?, dob = ?, password = ?
+          SET first_name = ?, last_name = ?, email_address = ?, dob = ?, password = ?, security_question = ?, security_answer = ?
           WHERE phone_number = ?
         `;
-        updateParams = [first_name, last_name, email_address, date_of_birth, password, phone_number];
+        updateParams = [first_name, last_name, email_address, date_of_birth, hash_password, security_question, security_answer, phone_number];
   
       } else if (account_type === 'AGENT') {
-        if (!first_name || !email_address || !business_name || !business_address || !password) {
-          return res.status(400).json({ success: false, message: 'Missing required AGENT fields' });
+        if (!first_name || !email_address || !business_name || !business_address || !password || !security_question || !security_answer) {
+          return res.status(400).json({ status: false, message: 'Missing required AGENT fields' });
         }
   
         updateQuery = `
           UPDATE users_account
-          SET first_name = ?, email_address = ?, business_name = ?, business_address = ?, password = ?
+          SET first_name = ?, email_address = ?, business_name = ?, business_address = ?, password = ?, security_question = ?, security_answer = ?
           WHERE phone_number = ?
         `;
-        updateParams = [first_name, email_address, business_name, business_address, password, phone_number];
+        updateParams = [first_name, email_address, business_name, business_address, hash_password, security_question, security_answer, phone_number];
   
       } else {
-        return res.status(400).json({ success: false, message: 'Unknown account type' });
+        return res.status(400).json({ status: false, message: 'Unknown account type' });
       }
   
       // 5. Execute update
       await pool.query(updateQuery, updateParams);
   
-      return res.status(200).json({ success: true, message: 'Profile updated successfully' });
+      return res.status(200).json({ status: true, message: 'Profile updated successfully' });
     } catch (err) {
       console.error('Error updating user profile:', err);
-      return res.status(500).json({ success: false, message: 'Server error' });
+      return res.status(500).json({ status: false, message: 'Server error' });
     }
+};
+
+
+
+
+
+
+exports.updateUserDetails = async (req, res) => {
+  const { user_id, first_name, last_name, email_address, dob, security_question, security_answer } = req.body;
+
+  // 1. Validate input
+  if (!user_id || !first_name || !last_name || !email_address || !dob || !security_question || !security_answer) {
+    return res.status(400).json({
+      success: false,
+      message: 'All fields are required: user_id, first_name, last_name, email_address, dob, security_question, security_answer'
+    });
+  }
+
+  try {
+    // 2. Check if user_id exists in user_details
+    const [existing] = await pool.query(
+      'SELECT id FROM user_details WHERE user_id = ? LIMIT 1',
+      [user_id]
+    );
+
+    if (existing.length === 0) {
+      // 3. Insert new record
+      await pool.query(
+        `INSERT INTO user_details 
+          (user_id, first_name, last_name, email_address, dob, security_question, security_answer)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [user_id, first_name, last_name, email_address, dob, security_question, security_answer]
+      );
+
+      return res.status(201).json({ success: true, message: 'User details inserted successfully' });
+    } else {
+      // 4. Update existing record
+      await pool.query(
+        `UPDATE user_details 
+         SET first_name = ?, last_name = ?, email_address = ?, dob = ?, security_question = ?, security_answer = ?
+         WHERE user_id = ?`,
+        [first_name, last_name, email_address, dob, security_question, security_answer, user_id]
+      );
+
+      return res.status(200).json({ success: true, message: 'User details updated successfully' });
+    }
+
+  } catch (err) {
+    console.error('Error upserting user details:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
+
+
+
+exports.login = async (req, res) => {
+  const { phone_number, password } = req.body;
+
+  if (!phone_number || !password) {
+    return res.status(400).json({ status: false, message: "Phone number and password are required" });
+  }
+
+  try {
+    // Find user
+    const [rows] = await pool.query(
+      "SELECT user_id, phone_number, password, account_type, status FROM users_account WHERE phone_number = ? LIMIT 1",
+      [phone_number]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    const user = rows[0];
+
+    // Check account status
+    if (user.status === 0) {
+      return res.status(403).json({ status: false, message: "Account not verified" });
+    }
+    if (user.status !== 1) {
+      return res.status(403).json({ status: false, message: "Account inactive, contact support" });
+    }
+
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ status: false, message: "Invalid credentials" });
+    }
+
+    // Sign JWT token
+    const token = jwt.sign(
+      {
+        user_id: user.user_id,
+        phone_number: user.phone_number,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" } // adjust as needed
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Login successful",
+      token,
+      data: {
+        user_id: user.user_id,
+        phone_number: user.phone_number,
+        account_type: user.account_type,
+      },
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+};
+
+
+
+
+
+exports.resetPasswordRequest = async (req, res) => {
+  const { phone_number } = req.body;
+
+  if (!phone_number) {
+    return res.status(400).json({ status: false, message: "Phone number is required" });
+  }
+
+  try {
+    // Check if user exists
+    const [users] = await pool.query(
+      "SELECT user_id, phone_number FROM users_account WHERE phone_number = ? LIMIT 1",
+      [phone_number]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    const { user_id, phone_number: dbPhone } = users[0];
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Insert or update reset_password table
+    const [resetRecords] = await pool.query(
+      "SELECT user_id FROM reset_password WHERE user_id = ? LIMIT 1",
+      [user_id]
+    );
+
+    if (resetRecords.length > 0) {
+      await pool.query(
+        "UPDATE reset_password SET otp = ?, date_created = NOW() WHERE user_id = ?",
+        [otp, user_id]
+      );
+    } else {
+      await pool.query(
+        "INSERT INTO reset_password (user_id, otp, date_created) VALUES (?, ?, NOW())",
+        [user_id, otp]
+      );
+    }
+
+    // Generate JWT token with user_id & phone_number
+    const token = jwt.sign(
+      { user_id, phone_number: dbPhone },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" } // short expiry for security
+    );
+
+    // 5. Return success
+    return res.status(200).json({
+      status: true,
+      message: "OTP generated successfully. Use it to reset your password.",
+      token, 
+    });
+
+  } catch (err) {
+    console.error("Reset password error:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+};
+
+
+
+
+
+exports.changePassword = async (req, res) => {
+  const { phone_number, password } = req.body;
+
+  // Extract token from "Authorization: Bearer <token>"
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) {
+    return res.status(401).json({ status: false, message: "Authorization header missing" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).json({ status: false, message: "Invalid authorization format" });
+  }
+
+  try {
+    // Decode & verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ status: false, message: "Invalid or expired token" });
+    }
+
+    if (decoded.phone_number !== phone_number) {
+      return res.status(403).json({ status: false, message: "Phone number does not match token" });
+    }
+
+    // Validate password strength
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{7,}$/;
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        status: false,
+        message:
+          "Password must be at least 7 characters, include uppercase, lowercase, number, and special character",
+      });
+    }
+
+    // Hash password
+    const hashedPassword = await hashPassword(password, 10);
+
+    // Retrieve user_id from DB
+    const [rows] = await pool.query(
+      "SELECT user_id FROM users_account WHERE phone_number = ?",
+      [phone_number]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    const user_id = rows[0].user_id;
+
+    // Update user password
+    await pool.query("UPDATE users_account SET password = ? WHERE phone_number = ?", [
+      hashedPassword,
+      phone_number,
+    ]);
+
+    // Delete reset record
+    await pool.query("DELETE FROM reset_password WHERE user_id = ?", [user_id]);
+
+    return res.status(200).json({
+      status: true,
+      message: "Password changed successfully",
+    });
+  } catch (err) {
+    console.error("Change password error:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
 };
