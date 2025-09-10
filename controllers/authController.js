@@ -9,11 +9,14 @@ const { sendMail } = require("../utils/mailHelper");
 const bcrypt = require("bcrypt");
 
 
+let refreshTokens = [];
+
+
 //Create Account (first segment)
 exports.create_account_first = async (req, res) => {
     if (!req.body) {
         return res.status(400).json({
-            status: "error",
+            status: false,
             message: 'Request body is missing or invalid JSON'
         });
     }
@@ -24,7 +27,7 @@ exports.create_account_first = async (req, res) => {
     const validTypes = ['USER', 'AGENT'];
     if (!validTypes.includes(account_type)) {
         return res.status(400).json({
-            status: "error",
+            status: false,
             message: 'Invalid account type submitted' 
         });
     }
@@ -32,7 +35,7 @@ exports.create_account_first = async (req, res) => {
     // Validate phone_number length and numeric
     if (!phone_number || phone_number.length !== 11 || /^\d{10}$/.test(phone_number)) {
         return res.status(400).json({ 
-            status: "error",
+            status: false,
             message: 'Phone number must be exactly 11 digits' + phone_number.length + !phone_number
         });
     }
@@ -46,7 +49,7 @@ exports.create_account_first = async (req, res) => {
 
         if (existing.length > 0) {
             return res.status(409).json({ 
-                status: "error",
+                status: false,
                 message: 'Phone number already exists' 
             });
         }
@@ -68,7 +71,7 @@ exports.create_account_first = async (req, res) => {
 
 
         res.status(201).json({
-            status: "success",
+            status: true,
             message: 'OTP sent to ' + phone_number + ' successfully',
             data: {
                 id,
@@ -91,7 +94,7 @@ exports.verifyOtp = async (req, res) => {
     const { phone_number, otp } = req.body;
   
     if (!phone_number || !otp) {
-      return res.status(400).json({ success: "error", message: 'phone_number and otp are required' });
+      return res.status(400).json({ success: false, message: 'phone_number and otp are required' });
     }
   
     try {
@@ -102,7 +105,7 @@ exports.verifyOtp = async (req, res) => {
       );
   
       if (otpResult.length === 0) {
-        return res.status(404).json({ success: "error", message: 'Invalid or expired OTP' });
+        return res.status(404).json({ success: false, message: 'Invalid or expired OTP' });
       }
   
       // Delete OTP entry
@@ -124,7 +127,7 @@ exports.verifyOtp = async (req, res) => {
       );
   
       if (userResult.length === 0) {
-        return res.status(404).json({ success: "error", message: 'User not found after OTP verification' });
+        return res.status(404).json({ success: false, message: 'User not found after OTP verification' });
       }
   
       const user = userResult[0];
@@ -138,7 +141,7 @@ exports.verifyOtp = async (req, res) => {
   
       // Return response with token
       return res.status(200).json({
-        status: "success",
+        status: true,
         message: 'OTP verified and account activated',
         token,
         data: {
@@ -148,8 +151,61 @@ exports.verifyOtp = async (req, res) => {
       });
     } catch (err) {
       console.error('Error verifying OTP:', err);
-      return res.status(500).json({ status: "error", message: 'Server error' });
+      return res.status(500).json({ status: false, message: 'Server error' });
     }
+};
+
+
+
+
+
+// generates and resends a new OTP
+exports.resendOtp = async (req, res) => {
+  const { phone_number } = req.body;
+
+  if (!phone_number) {
+    return res
+      .status(400)
+      .json({ status: false, message: "phone_number is required" });
+  }
+
+  try {
+    // 1. Check if phone_number exists in users_account
+    const [userResult] = await pool.query(
+      "SELECT user_id FROM users_account WHERE phone_number = ? LIMIT 1",
+      [phone_number]
+    );
+
+    if (userResult.length === 0) {
+      return res
+        .status(404)
+        .json({ status: false, message: "Phone number not registered" });
+    }
+
+    // 2. Generate new OTP (6-digit)
+    const otp = Math.floor(100000 + Math.random() * 900000);
+
+    // 3. Insert or update users_otp table
+    await pool.query(
+      `
+      INSERT INTO users_otp (phone_number, otp) 
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE otp = VALUES(otp), date_created = NOW()
+      `,
+      [phone_number, otp]
+    );
+
+    // 4. Respond with success
+    return res.status(200).json({
+      status: true,
+      message: "OTP generated successfully",
+    });
+  } catch (err) {
+    console.error("Error generating OTP:", err);
+    return res
+      .status(500)
+      .json({ status: false, message: "Server error while generating OTP" });
+  }
 };
 
 
@@ -169,13 +225,13 @@ exports.listOtps = async (req, res) => {
 
     // Return response with token
     return res.status(200).json({
-      status: "success",
+      status: true,
       message: 'Listed all Pending OTPs',
       data: otpResult
     });
   } catch (err) {
     console.error('Error listing OTP:', err);
-    return res.status(500).json({ status: "error", message: 'Server error' });
+    return res.status(500).json({ status: false, message: 'Server error' });
   }
 };
 
@@ -435,7 +491,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT user_id, first_name, phone_number, email_address, password, account_type, status FROM users_account WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, first_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created FROM users_account WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
@@ -483,15 +539,33 @@ exports.login = async (req, res) => {
       `Dear <strong>${first_name}</strong>,<br><br>You have logged-in successfully to First Step Payments on ${now}.<br><br>If you did not perform this action, please contact support immediately on <a href="mailto:support@firststeppayments.com">support@firststeppayments.com</a>.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
     );
 
+
+    //status
+    let status_ = ["UNVERIFIED", "VERIFIED", "DELETED", "SUSPENDED", "INCOMPLETE_DETAILS"];
+
+    let responseData = {
+      user_id: user.user_id,
+      first_name: user.first_name,
+      phone_number: user.phone_number,
+      email: user.email_address,
+      date_of_birth: user.dob,
+      account_type: user.account_type,
+      security_question: user.security_question,
+      account_status: status_[user.status],
+      account_created: user.date_created,
+    };
+
+    // Add business info if not USER
+    if (user.account_type !== "USER") {
+      responseData.business_name = user.business_name;
+      responseData.business_address = user.business_address;
+    }
+
     return res.status(200).json({
       status: true,
       message: "Login successful",
       token,
-      data: {
-        user_id: user.user_id,
-        phone_number: user.phone_number,
-        account_type: user.account_type,
-      },
+      data: responseData,
     });
   } catch (err) {
     console.error("Login error:", err);
@@ -637,4 +711,47 @@ exports.changePassword = async (req, res) => {
     console.error("Change password error:", err);
     return res.status(500).json({ status: false, message: "Server error" });
   }
+};
+
+
+
+
+
+exports.refreshToken = async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {// || !refreshTokens.includes(token)
+    return res.status(403).json({ message: "Refresh token not valid" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || "your_jwt_secret", (err, user) => {
+    if (err) return res.status(403).json({
+        status: false,
+        message: "Invalid refresh token" 
+      });
+
+    // create a new access token with the same payload
+    const accessToken = jwt.sign(
+      { user_id: user.user_id, phone_number: user.phone_number },
+      process.env.JWT_SECRET || "your_jwt_secret",
+      { expiresIn: "15m" }
+    );
+
+    // (optional) rotate refresh token for extra security
+    const newRefreshToken = jwt.sign(
+      { user_id: user.user_id, phone_number: user.phone_number },
+      process.env.JWT_SECRET || "your_jwt_secret",
+      { expiresIn: "7d" }
+    );
+
+    // replace old refresh token with the new one
+    refreshTokens = refreshTokens.filter(t => t !== token);
+    refreshTokens.push(newRefreshToken);
+
+    res.json({ 
+      status: true,
+      accessToken, 
+      refreshToken: newRefreshToken 
+    });
+  });
 };
