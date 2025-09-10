@@ -5,6 +5,7 @@ const validator = require('validator');
 const { encrypt } = require('../utils/cryptoHelper');
 const jwt = require("jsonwebtoken");
 const { hashPassword } = require("../utils/utilities");
+const { sendMail } = require("../utils/mailHelper");
 const bcrypt = require("bcrypt");
 
 
@@ -155,6 +156,33 @@ exports.verifyOtp = async (req, res) => {
 
 
 
+
+// this is only for test
+exports.listOtps = async (req, res) => {
+
+  try {
+    // Check if OTP exists
+    const [otpResult] = await pool.query(
+      'SELECT * FROM users_otp'
+    );
+
+
+    // Return response with token
+    return res.status(200).json({
+      status: "success",
+      message: 'Listed all Pending OTPs',
+      data: otpResult
+    });
+  } catch (err) {
+    console.error('Error listing OTP:', err);
+    return res.status(500).json({ status: "error", message: 'Server error' });
+  }
+};
+
+
+
+
+
 exports.updateUserProfile = async (req, res) => {
 
   // validate JWT token
@@ -275,6 +303,13 @@ exports.updateUserProfile = async (req, res) => {
   
       // 5. Execute update
       await pool.query(updateQuery, updateParams);
+
+      // Send notification email
+      await sendMail(
+        email_address,
+        "FirstStep Payments Profile Update",
+        `Hello <strong>${first_name}</strong>,<br><br>Your profile has been updated successfully.<br><br>If you did not perform this action, please contact support immediately.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
+      );
   
       return res.status(200).json({ status: true, message: 'Profile updated successfully' });
     } catch (err) {
@@ -338,6 +373,58 @@ exports.updateUserDetails = async (req, res) => {
 
 
 
+function formatDate(date) {
+  const day = date.getDate();
+
+  // Add "st", "nd", "rd", "th" suffix
+  const suffix =
+    day % 10 === 1 && day !== 11 ? "st" :
+    day % 10 === 2 && day !== 12 ? "nd" :
+    day % 10 === 3 && day !== 13 ? "rd" : "th";
+
+  const month = date.toLocaleString("en-US", { month: "long" });
+  const year = date.getFullYear();
+
+  // Format time (e.g., 5:07 PM)
+  const time = date.toLocaleString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  return `${day}${suffix} of ${month}, ${year} at ${time}`;
+}
+
+
+
+function getFormattedNow() {
+  const date = new Date(); // always "now"
+
+  const day = date.getDate();
+
+  // Add "st", "nd", "rd", "th" suffix
+  const suffix =
+    day % 10 === 1 && day !== 11 ? "st" :
+    day % 10 === 2 && day !== 12 ? "nd" :
+    day % 10 === 3 && day !== 13 ? "rd" : "th";
+
+  const month = date.toLocaleString("en-US", { month: "long" });
+  const year = date.getFullYear();
+
+  // Format time (e.g., 5:07 PM)
+  const time = date.toLocaleString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+
+  return `${day}${suffix} of ${month}, ${year} at ${time}`;
+}
+
+
+
+
+
 exports.login = async (req, res) => {
   const { phone_number, password } = req.body;
 
@@ -348,7 +435,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT user_id, phone_number, password, account_type, status FROM users_account WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, first_name, phone_number, email_address, password, account_type, status FROM users_account WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
@@ -366,6 +453,8 @@ exports.login = async (req, res) => {
       return res.status(403).json({ status: false, message: "Account inactive, contact support" });
     }
 
+    console.log(password, user.password);
+
     // Compare password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -380,6 +469,18 @@ exports.login = async (req, res) => {
       },
       process.env.JWT_SECRET,
       { expiresIn: "7d" } // adjust as needed
+    );
+
+
+    const now = getFormattedNow();
+    const email_address = user.email_address;
+    const first_name = user.first_name;
+
+    // Send notification email
+    await sendMail(
+      email_address,
+      "FirstStep Payments Successful Login",
+      `Dear <strong>${first_name}</strong>,<br><br>You have logged-in successfully to First Step Payments on ${now}.<br><br>If you did not perform this action, please contact support immediately on <a href="mailto:support@firststeppayments.com">support@firststeppayments.com</a>.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
     );
 
     return res.status(200).json({

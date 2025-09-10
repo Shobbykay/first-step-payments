@@ -65,7 +65,7 @@ exports.createTransactionPin = async (req, res) => {
       await sendMail(
         userEmail,
         "Transaction PIN Set Successfully",
-        `hello test`
+        `Hello <strong>${firstName}</strong>,<br><br>Your transaction PIN has been set successfully.<br><br>If you did not perform this action, please contact support immediately.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
       );
   
       return res.status(201).json({ status: true, message: "Transaction PIN set successfully" });
