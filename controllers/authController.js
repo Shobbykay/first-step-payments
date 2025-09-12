@@ -491,7 +491,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT user_id, first_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created FROM users_account WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, first_name, last_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created FROM users_account WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
