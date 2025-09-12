@@ -546,6 +546,7 @@ exports.login = async (req, res) => {
     let responseData = {
       user_id: user.user_id,
       first_name: user.first_name,
+      last_name: user.last_name,
       phone_number: user.phone_number,
       email: user.email_address,
       date_of_birth: user.dob,
@@ -567,6 +568,7 @@ exports.login = async (req, res) => {
       token,
       data: responseData,
     });
+
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ status: false, message: "Server error" });
