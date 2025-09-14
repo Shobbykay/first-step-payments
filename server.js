@@ -31,11 +31,15 @@ const pool = mysql.createPool({
 const helloRoutes = require('./routes/hello');
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
+const linkedAccountsRoutes = require('./routes/linked_accounts');
+const notificationRoutes = require('./routes/notification');
 const superadminRoutes = require('./routes/superadmin');
 
 app.use('/api', helloRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/notification', notificationRoutes);
+app.use('/api/v1/linked_accounts', linkedAccountsRoutes);
 app.use('/api/v1/superadmin', superadminRoutes);
 
 

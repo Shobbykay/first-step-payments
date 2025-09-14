@@ -2,7 +2,6 @@ const { v4: uuidv4 } = require('uuid');
 const mysql = require('mysql2/promise');
 const pool = require('../services/db');
 const validator = require('validator');
-const { encrypt } = require('../utils/cryptoHelper');
 const jwt = require("jsonwebtoken");
 const { hashPassword } = require("../utils/utilities");
 const { sendMail } = require("../utils/mailHelper");
@@ -643,7 +642,7 @@ exports.resetPasswordRequest = async (req, res) => {
 
 
 
-
+//for reset password
 exports.changePassword = async (req, res) => {
   const { phone_number, password } = req.body;
 
@@ -715,6 +714,57 @@ exports.changePassword = async (req, res) => {
   }
 };
 
+
+
+
+
+//for within the app (signed in user)
+exports.changePassword_signedin = async (req, res) => {
+  const { old_password, new_password } = req.body;
+  const { user_id } = req.user; // comes from auth middleware (decoded token)
+
+  if (!old_password || !new_password) {
+    return res.status(400).json({ status: false, message: "Both old and new passwords are required" });
+  }
+
+  try {
+    // Fetch user by ID
+    const [rows] = await pool.query(
+      "SELECT password FROM users_account WHERE user_id = ? LIMIT 1",
+      [user_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ status: false, message: "User not found" });
+    }
+
+    const hashedPassword = rows[0].password;
+
+    // Compare old password
+    const isMatch = await bcrypt.compare(old_password, hashedPassword);
+    if (!isMatch) {
+      return res.status(401).json({ status: false, message: "Old password is incorrect" });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const newHashedPassword = await bcrypt.hash(new_password, saltRounds);
+
+    // Update DB
+    await pool.query(
+      "UPDATE users_account SET password = ?, date_updated = NOW() WHERE user_id = ?",
+      [newHashedPassword, user_id]
+    );
+
+    return res.json({
+      status: true,
+      message: "Password updated successfully"
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+    return res.status(500).json({ status: false, message: "Database error" });
+  }
+};
 
 
 

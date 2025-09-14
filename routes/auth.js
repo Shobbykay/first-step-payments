@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { create_account_first, login, verifyOtp, resendOtp, refreshToken, listOtps, updateUserProfile, updateUserDetails, resetPasswordRequest, changePassword } = require('../controllers/authController');
+const { create_account_first, login, verifyOtp, resendOtp, refreshToken, listOtps, updateUserProfile, updateUserDetails, resetPasswordRequest, changePassword, changePassword_signedin } = require('../controllers/authController');
+const auth = require("../middleware/userAuth");
 
 // {BASE_URL}/api/v1/auth/
 
@@ -14,5 +15,8 @@ router.post('/update_profile', updateUserDetails);
 router.post('/login', login);
 router.post('/reset', resetPasswordRequest);
 router.post('/password', changePassword);
+
+//protected (signed in)
+router.post('/change_password', auth, changePassword_signedin);
 
 module.exports = router;
