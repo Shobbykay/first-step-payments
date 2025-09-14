@@ -34,6 +34,18 @@ exports.login = async (req, res) => {
         { expiresIn: "7d" } // token valid for 7 days
         );
 
+        let user_id = user.user_id;
+
+        //INSERT token to login table
+        await pool.query(
+        `INSERT INTO admin_login_token (user_id, login_token)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE
+        login_token = VALUES(login_token),
+        date_created = CURRENT_TIMESTAMP`,
+        [user_id, token]
+        );
+
         // return user data + token
         return res.json({
             status: true,
@@ -47,6 +59,60 @@ exports.login = async (req, res) => {
         return res.status(500).json({ status: false, message: "Server error" });
     }
 };
+
+exports.logoutAdmin = async (req, res) => {
+    const { email_address } = req.body;
+
+    if (!email_address) {
+        return res.status(400).json({
+        status: false,
+        message: "Email address is required"
+        });
+    }
+
+    try {
+        // Fetch user_id from admin_users
+        const [rows] = await pool.query(
+        "SELECT user_id FROM admin_users WHERE email_address = ? LIMIT 1",
+        [email_address]
+        );
+
+        if (rows.length === 0) {
+        return res.status(404).json({
+            status: false,
+            message: "User not found"
+        });
+        }
+
+        const user_id = rows[0].user_id;
+
+        // Delete token from login table
+        const [result] = await pool.query(
+        "DELETE FROM admin_login_token WHERE user_id = ?",
+        [user_id]
+        );
+
+        if (result.affectedRows === 0) {
+        return res.status(404).json({
+            status: false,
+            message: "No active session found"
+        });
+        }
+
+        return res.json({
+        status: true,
+        message: "Logout successful"
+        });
+    } catch (error) {
+        console.error("Logout error:", error);
+        return res.status(500).json({
+        status: false,
+        message: "Server error"
+        });
+    }
+};
+
+  
 
 
 exports.forgot = async (req, res) => {

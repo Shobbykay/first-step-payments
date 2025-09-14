@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { login, forgot, reset, confirmResetToken } = require('../controllers/superadmin/loginController');
+const { login, forgot, reset, confirmResetToken, logoutAdmin } = require('../controllers/superadmin/loginController');
 const { fetchAllCustomers, fetchSingleCustomer } = require('../controllers/superadmin/customerController');
 const auth = require("../middleware/auth");
 
@@ -9,6 +9,8 @@ router.post('/auth/login', login);
 router.post('/auth/forgot', forgot);
 router.post('/auth/confirm_reset_token', confirmResetToken);
 router.post('/auth/reset', reset);
+
+router.post('/auth/logout', logoutAdmin);
 
 
 //customer
