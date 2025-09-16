@@ -54,6 +54,10 @@ exports.create_account_first = async (req, res) => {
         }
 
 
+        // Generate UUID and insert
+        const id = uuidv4();
+
+
         let query;
         let values;
         let agent_id = generateAgentId;
@@ -71,8 +75,7 @@ exports.create_account_first = async (req, res) => {
             values = [id, phone_number, account_type];
         }
 
-        // Generate UUID and insert
-        const id = uuidv4();
+        //query
         await pool.query(query, values);
 
 
