@@ -28,6 +28,8 @@ module.exports = async(req, res, next) => {
         "SELECT user_id FROM users_account WHERE user_id = ? LIMIT 1",
         [decoded.user_id]
       );
+      console.log(decoded);
+      console.log(decoded.user_id);
   
       if (rows.length === 0) {
         return res.status(401).json({ status: false, message: "Invalid user" });
