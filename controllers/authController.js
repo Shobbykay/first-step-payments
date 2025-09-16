@@ -60,7 +60,7 @@ exports.create_account_first = async (req, res) => {
 
         let query;
         let values;
-        let agent_id = generateAgentId;
+        let agent_id = await generateAgentId();
         if (account_type === "AGENT") {
             query = `
               INSERT INTO users_account (user_id, phone_number, account_type, agent_id) 

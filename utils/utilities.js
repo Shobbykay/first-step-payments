@@ -29,7 +29,7 @@ exports.generateRandomString = (length = 7) => {
 }
 
 
-exports.generateAgentId = () => {
+exports.generateAgentId = async() => {
     const now = new Date();
     const seconds = String(now.getSeconds()).padStart(2, "0");
 
