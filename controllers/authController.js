@@ -365,10 +365,10 @@ exports.updateUserProfile = async (req, res) => {
   
         updateQuery = `
           UPDATE users_account
-          SET first_name = ?, email_address = ?, business_name = ?, business_address = ?, password = ?, security_question = ?, security_answer = ?
+          SET first_name = ?, last_name = ?, email_address = ?, dob = ?, business_name = ?, business_address = ?, password = ?, security_question = ?, security_answer = ?
           WHERE phone_number = ?
         `;
-        updateParams = [first_name, email_address, business_name, business_address, hash_password, security_question, security_answer, phone_number];
+        updateParams = [first_name, last_name, email_address, date_of_birth, business_name, business_address, hash_password, security_question, security_answer, phone_number];
   
       } else {
         return res.status(400).json({ status: false, message: 'Unknown account type' });
