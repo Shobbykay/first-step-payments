@@ -75,10 +75,23 @@ exports.retrieve_notifications = async (req, res) => {
       [user_id]
     );
 
+    let result;
+    if (settings.length > 0) {
+      result = settings[0];
+    } else {
+      result = {
+        user_id,
+        email_notification: 0,
+        push_notification: 0,
+        date_created: null,
+        date_modified: null
+      };
+    }
+
     return res.json({
       status: true,
       message: `Notification settings`,
-      data: settings[0],
+      data: result,
     });
 
   } catch (error) {
