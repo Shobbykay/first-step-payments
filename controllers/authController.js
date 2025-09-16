@@ -3,7 +3,7 @@ const mysql = require('mysql2/promise');
 const pool = require('../services/db');
 const validator = require('validator');
 const jwt = require("jsonwebtoken");
-const { hashPassword } = require("../utils/utilities");
+const { hashPassword, generateAgentId } = require("../utils/utilities");
 const { sendMail } = require("../utils/mailHelper");
 const bcrypt = require("bcrypt");
 
@@ -53,12 +53,27 @@ exports.create_account_first = async (req, res) => {
             });
         }
 
+
+        let query;
+        let values;
+        let agent_id = generateAgentId;
+        if (account_type === "AGENT") {
+            query = `
+              INSERT INTO users_account (user_id, phone_number, account_type, agent_id) 
+              VALUES (?, ?, ?, ?)
+            `;
+            values = [id, phone_number, account_type, agent_id];
+        } else {
+            query = `
+              INSERT INTO users_account (user_id, phone_number, account_type) 
+              VALUES (?, ?, ?)
+            `;
+            values = [id, phone_number, account_type];
+        }
+
         // Generate UUID and insert
         const id = uuidv4();
-        await pool.query(
-        'INSERT INTO users_account (user_id, phone_number, account_type) VALUES (?, ?, ?)',
-        [id, phone_number, account_type]
-        );
+        await pool.query(query, values);
 
 
         //generate otp
@@ -365,8 +380,30 @@ exports.updateUserProfile = async (req, res) => {
         "FirstStep Payments Profile Update",
         `Hello <strong>${first_name}</strong>,<br><br>Your profile has been updated successfully.<br><br>If you did not perform this action, please contact support immediately.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
       );
+
+
+      //status
+      let status_ = ["UNVERIFIED", "VERIFIED", "DELETED", "SUSPENDED", "INCOMPLETE_DETAILS"];
+
+      // fetch user data
+      const [rows] = await pool.query(
+        "SELECT user_id, account_type, agent_id, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, security_answer, date_created, date_updated FROM users_account WHERE phone_number = ?",
+        [phone_number]
+      );
+
+      // map numeric status to text
+      if (rows[0]) {
+        // map status
+        rows[0].status = status_[rows[0].status];
+
+        // remove fields if account_type = USER
+        if (rows[0].account_type === "USER") {
+          const { agent_id, business_name, business_address, ...rest } = rows[0];
+          rows[0] = rest;
+        }
+      }
   
-      return res.status(200).json({ status: true, message: 'Profile updated successfully' });
+      return res.status(200).json({ status: true, message: 'Profile updated successfully', data: rows[0] });
     } catch (err) {
       console.error('Error updating user profile:', err);
       return res.status(500).json({ status: false, message: 'Server error' });
@@ -490,7 +527,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT user_id, first_name, last_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created FROM users_account WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, first_name, last_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created, agent_id FROM users_account WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
@@ -507,8 +544,6 @@ exports.login = async (req, res) => {
     if (user.status !== 1) {
       return res.status(403).json({ status: false, message: "Account inactive, contact support" });
     }
-
-    console.log(password, user.password);
 
     // Compare password
     const isMatch = await bcrypt.compare(password, user.password);
@@ -531,6 +566,14 @@ exports.login = async (req, res) => {
     const email_address = user.email_address;
     const first_name = user.first_name;
 
+    // check if transaction pin is set
+    const [rows_pin] = await pool.query(
+      "SELECT * FROM transaction_pin WHERE user_id = ?",
+      [user.user_id]
+    );
+
+    const is_transaction_pin_set = (rows_pin.length > 0) ? true : false;
+
     // Send notification email
     await sendMail(
       email_address,
@@ -551,12 +594,14 @@ exports.login = async (req, res) => {
       date_of_birth: user.dob,
       account_type: user.account_type,
       security_question: user.security_question,
+      is_transaction_pin_set,
       account_status: status_[user.status],
       account_created: user.date_created,
     };
 
     // Add business info if not USER
     if (user.account_type !== "USER") {
+      responseData.agent_id = user.agent_id;
       responseData.business_name = user.business_name;
       responseData.business_address = user.business_address;
     }
