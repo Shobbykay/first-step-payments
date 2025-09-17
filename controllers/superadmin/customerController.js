@@ -23,7 +23,7 @@ exports.fetchAllCustomers = async (req, res) => {
         let offset = (page - 1) * limit;
 
         // Get total count
-        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='USER' AND status='ACTIVE'");
+        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='USER' AND status IN (0,1)");
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
