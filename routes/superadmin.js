@@ -35,8 +35,8 @@ router.get('/customer/suspend/all', auth, fetchSuspendedCustomers);
 router.get('/customer/archive/all', auth, fetchArchiveCustomers);
 router.post('/customer/suspend/:user_id', auth, suspendCustomer);
 router.post('/customer/close/:user_id', auth, closeCustomer);
-router.get('/customer/delete/:user_id', auth, deleteCustomer);
-router.get('/customer/restore/:user_id', auth, restoreCustomer);
+router.post('/customer/delete/:user_id', auth, deleteCustomer);
+router.post('/customer/restore/:user_id', auth, restoreCustomer);
 router.post('/customer/update/:user_id', auth, updateCustomer);
 router.post('/customer/password/:user_id', auth, changeUserPassword);
 
@@ -50,8 +50,8 @@ router.get('/agent/suspend/all', auth, fetchSuspendedAgents);
 router.get('/agent/archive/all', auth, fetchArchiveAgents);
 router.post('/agent/suspend/:user_id', auth, suspendAgent);
 router.post('/agent/close/:user_id', auth, closeAgent);
-router.get('/agent/delete/:user_id', auth, deleteAgent);
-router.get('/agent/restore/:user_id', auth, restoreAgent);
+router.post('/agent/delete/:user_id', auth, deleteAgent);
+router.post('/agent/restore/:user_id', auth, restoreAgent);
 router.post('/agent/password/:user_id', auth, changeAgentPassword);
 router.post('/agent/update/:user_id', auth, updateAgent);
 
