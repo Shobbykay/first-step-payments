@@ -586,7 +586,7 @@ exports.login = async (req, res) => {
 
 
     //status
-    let status_ = ["UNVERIFIED", "VERIFIED", "DELETED", "SUSPENDED", "INCOMPLETE_DETAILS"];
+    let status_ = ["UNVERIFIED", "VERIFIED", "DELETED", "SUSPENDED", "INCOMPLETE_DETAILS", "CLOSED"];
 
     let responseData = {
       user_id: user.user_id,

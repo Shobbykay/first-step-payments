@@ -36,3 +36,12 @@ exports.generateAgentId = async() => {
     const str = 'AGR-' + this.generateRandomString() + seconds;
     return str;
 }
+
+exports.allowedAdminRoles = () => {
+  return [
+    "ADMINISTRATOR",
+    "CUSTOMER_SUPPORT",
+    "FINANCE_OFFICER",
+    "COMPLIANCE",
+  ];
+};

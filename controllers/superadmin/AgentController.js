@@ -15,7 +15,7 @@ const statusMap = {
     5: "CLOSED"
 };
 
-exports.fetchAllCustomers = async (req, res) => {
+exports.fetchAllAgents = async (req, res) => {
     try {
 
         let page = parseInt(req.query.page) || 1;
@@ -23,15 +23,15 @@ exports.fetchAllCustomers = async (req, res) => {
         let offset = (page - 1) * limit;
 
         // Get total count
-        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='USER'");
+        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='AGENT'");
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
-        // Fetch paginated users
+        // Fetch paginated user agents
         const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created 
+            `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created 
             FROM users_account 
-            WHERE account_type = 'USER'
+            WHERE account_type = 'AGENT'
             ORDER BY date_created DESC
             LIMIT ? OFFSET ?`,
             [limit, offset]
@@ -45,7 +45,7 @@ exports.fetchAllCustomers = async (req, res) => {
 
         return res.json({
             status: true,
-            message: "User Accounts fetched successfully",
+            message: "Agent Accounts fetched successfully",
             data: {
                 pagination: {
                     total,
@@ -66,60 +66,67 @@ exports.fetchAllCustomers = async (req, res) => {
 
 
 
-exports.fetchSuspendedCustomers = async (req, res) => {
-    try {
-        let page = parseInt(req.query.page) || 1;
-        let limit = 30;
-        let offset = (page - 1) * limit;
+exports.fetchSuspendedAgents = async (req, res) => {
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = 30;
+    let offset = (page - 1) * limit;
 
-        // Get total count of suspended users
-        const [countResult] = await pool.query(
-            "SELECT COUNT(*) as total FROM users_account WHERE status = 3 AND account_type = 'USER'"
-        );
-        const total = countResult[0].total;
-        const totalPages = Math.ceil(total / limit);
+    // Get total count of suspended AGENT users
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM users_account WHERE status = 3 AND account_type = 'AGENT'"
+    );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
 
-        // Fetch paginated suspended users
-        const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, suspension_reason
-             FROM users_account 
-             WHERE status = 3
-             AND account_type = 'USER'
-             ORDER BY date_created DESC
-             LIMIT ? OFFSET ?`,
-            [limit, offset]
-        );
+    // Fetch paginated suspended AGENTs
+    const [rows] = await pool.query(
+      `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, suspension_reason
+       FROM users_account 
+       WHERE status = 3
+       AND account_type = 'AGENT'
+       ORDER BY date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
 
-        // Transform rows: rename `status` -> `kyc_status`
-        const formattedRows = rows.map(({ status, ...rest }) => ({
-            ...rest,
-            kyc_status: statusMap[status] || "UNKNOWN"
-        }));
-
-        return res.json({
-            status: true,
-            message: "Suspended user accounts fetched successfully",
-            data: {
-                pagination: {
-                    total,
-                    page,
-                    totalPages,
-                    limit
-                },
-                records: formattedRows
-            }
-        });
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ status: false, message: "Server error" });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No suspended AGENT accounts found",
+      });
     }
+
+    // Transform rows: rename `status` -> `kyc_status`
+    const formattedRows = rows.map(({ status, ...rest }) => ({
+      ...rest,
+      kyc_status: statusMap[status] || "UNKNOWN",
+    }));
+
+    return res.json({
+      status: true,
+      message: "Suspended AGENT accounts fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit,
+        },
+        records: formattedRows,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
 };
 
 
 
 
-exports.fetchArchiveCustomers = async (req, res) => {
+
+exports.fetchArchiveAgents = async (req, res) => {
     try {
         let page = parseInt(req.query.page) || 1;
         let limit = 30;
@@ -127,17 +134,17 @@ exports.fetchArchiveCustomers = async (req, res) => {
 
         // Get total count of archived users (deleted or closed)
         const [countResult] = await pool.query(
-            "SELECT COUNT(*) as total FROM users_account WHERE status IN (2, 5) AND account_type = 'USER'"
+            "SELECT COUNT(*) as total FROM users_account WHERE status IN (2, 5) AND account_type = 'AGENT'"
         );
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
         // Fetch paginated archived users
         const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, closure_reason
+            `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, closure_reason
              FROM users_account 
              WHERE status IN (2, 5)
-             AND account_type = 'USER'
+             AND account_type = 'AGENT'
              ORDER BY date_created DESC
              LIMIT ? OFFSET ?`,
             [limit, offset]
@@ -151,7 +158,7 @@ exports.fetchArchiveCustomers = async (req, res) => {
 
         return res.json({
             status: true,
-            message: "Archived user accounts fetched successfully",
+            message: "Archived Agent accounts fetched successfully",
             data: {
                 pagination: {
                     total,
@@ -174,54 +181,65 @@ exports.fetchArchiveCustomers = async (req, res) => {
 
 
 
-exports.fetchSingleCustomer = async (req, res) => {
-    try {
-        const { user_id } = req.params;
-    
-        // Fetch user by ID
-        const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created
-            FROM users_account 
-            WHERE user_id = ? 
-            LIMIT 1`,
-            [user_id]
-        );
+exports.fetchSingleAgent = async (req, res) => {
+  try {
+    const { user_id } = req.params;
 
-        if (rows.length === 0) {
-            return res.status(200).json({
-            status: false,
-            message: "User not found"
-            });
-        }
+    // Fetch user by ID
+    const [rows] = await pool.query(
+      `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created
+       FROM users_account 
+       WHERE user_id = ? 
+       LIMIT 1`,
+      [user_id]
+    );
 
-        // Format user
-        const user = {
-            ...rows[0],
-            kyc_status: statusMap[rows[0].status] || "UNKNOWN"
-        };
-
-        // Remove numeric status
-        delete user.status;
-
-        return res.json({
-            status: true,
-            message: "User fetched successfully",
-            data: user
-        });
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ status: false, message: "Server error" });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
     }
+
+    const userRecord = rows[0];
+
+    // Ensure the account is an AGENT
+    if (userRecord.account_type !== "AGENT") {
+      return res.status(400).json({
+        status: false,
+        message: "User is not an AGENT",
+      });
+    }
+
+    // Format user
+    const user = {
+      ...userRecord,
+      kyc_status: statusMap[userRecord.status] || "UNKNOWN",
+      kyc_documents: {}, // placeholder, can be replaced with real docs
+    };
+
+    // Remove numeric status
+    delete user.status;
+
+    return res.json({
+      status: true,
+      message: "Agent fetched successfully",
+      data: user,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
 };
 
 
 
-exports.suspendCustomer = async (req, res) => {
+
+exports.suspendAgent = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { reason } = req.body;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.id || "SYSTEM";
 
         // Ensure reason is provided
         if (!reason || reason.trim() === "") {
@@ -231,22 +249,43 @@ exports.suspendCustomer = async (req, res) => {
             });
         }
 
-        // Check if user exists
+        // Check if user exists and fetch account_type
         const [rows] = await pool.query(
-            `SELECT user_id FROM users_account WHERE user_id = ? LIMIT 1`,
+            `SELECT user_id, account_type 
+             FROM users_account 
+             WHERE user_id = ? 
+             LIMIT 1`,
             [user_id]
         );
 
         if (rows.length === 0) {
             await logAction({
                 user_id,
-                action: "SUSPEND_CUSTOMER",
+                action: "SUSPEND_AGENT",
                 log_message: `Attempted suspension but user not found. Reason: ${reason}`,
                 status: "FAILED",
                 action_by: admin_id
             });
 
             return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        const account = rows[0];
+
+        // Check if account_type is AGENT
+        if (account.account_type !== "AGENT") {
+            await logAction({
+                user_id,
+                action: "SUSPEND_AGENT",
+                log_message: `Attempted suspension but account_type is ${account.account_type}, not AGENT.`,
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({
+                status: false,
+                message: "Only AGENT accounts can be suspended"
+            });
         }
 
         // Update status = 3 (Suspended) and save reason
@@ -259,15 +298,15 @@ exports.suspendCustomer = async (req, res) => {
 
         await logAction({
             user_id,
-            action: "SUSPEND_CUSTOMER",
-            log_message: `User ${user_id} suspended. Reason: ${reason}`,
+            action: "SUSPEND_AGENT",
+            log_message: `Agent ${user_id} suspended. Reason: ${reason}`,
             status: "SUCCESS",
             action_by: admin_id
         });
 
         return res.json({
             status: true,
-            message: "User suspended successfully",
+            message: "Agent suspended successfully",
             data: { user_id, status: 3, reason }
         });
 
@@ -276,7 +315,7 @@ exports.suspendCustomer = async (req, res) => {
 
         await logAction({
             user_id: req.params.user_id,
-            action: "SUSPEND_CUSTOMER",
+            action: "SUSPEND_AGENT",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
             action_by: req.user?.id || null
@@ -289,11 +328,13 @@ exports.suspendCustomer = async (req, res) => {
 
 
 
-exports.closeCustomer = async (req, res) => {
+
+
+exports.closeAgent = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { reason } = req.body;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.id || "SYSTEM";
 
         // Ensure reason is provided
         if (!reason || reason.trim() === "") {
@@ -303,22 +344,43 @@ exports.closeCustomer = async (req, res) => {
             });
         }
 
-        // Check if user exists
+        // Check if user exists and fetch account_type
         const [rows] = await pool.query(
-            `SELECT user_id FROM users_account WHERE user_id = ? LIMIT 1`,
+            `SELECT user_id, account_type 
+             FROM users_account 
+             WHERE user_id = ? 
+             LIMIT 1`,
             [user_id]
         );
 
         if (rows.length === 0) {
             await logAction({
                 user_id,
-                action: "CLOSED_CUSTOMER",
-                log_message: `Attempted closing account but user not found. Reason: ${reason}`,
+                action: "CLOSE_AGENT",
+                log_message: `Attempted closing account but agent not found. Reason: ${reason}`,
                 status: "FAILED",
                 action_by: admin_id
             });
 
-            return res.status(404).json({ status: false, message: "User not found" });
+            return res.status(404).json({ status: false, message: "Agent not found" });
+        }
+
+        const account = rows[0];
+
+        // Check if account_type is AGENT
+        if (account.account_type !== "AGENT") {
+            await logAction({
+                user_id,
+                action: "CLOSE_CUSTOMER",
+                log_message: `Attempted closure but account_type is ${account.account_type}, not AGENT.`,
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({
+                status: false,
+                message: "Only AGENT accounts can be closed"
+            });
         }
 
         // Update status = 5 (Closed) and store closure reason
@@ -331,16 +393,15 @@ exports.closeCustomer = async (req, res) => {
 
         await logAction({
             user_id,
-            action: "CLOSED_CUSTOMER",
-            log_message: `User ${user_id} account closed. Reason: ${reason}`,
+            action: "CLOSE_CUSTOMER",
+            log_message: `Agent ${user_id} account closed. Reason: ${reason}`,
             status: "SUCCESS",
             action_by: admin_id
         });
 
         return res.json({
             status: true,
-            message: "User account closed successfully",
-            // data: { user_id, status: 5, reason }
+            message: "Agent account closed successfully"
         });
 
     } catch (err) {
@@ -348,7 +409,7 @@ exports.closeCustomer = async (req, res) => {
 
         await logAction({
             user_id: req.params.user_id,
-            action: "CLOSED_CUSTOMER",
+            action: "CLOSE_AGENT",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
             action_by: req.user?.id || null
@@ -363,20 +424,25 @@ exports.closeCustomer = async (req, res) => {
 
 
 
-exports.deleteCustomer = async (req, res) => {
+
+exports.deleteAgent = async (req, res) => {
     try {
         const { user_id } = req.params;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.id || "SYSTEM";
 
+        // Check if user exists and fetch account_type
         const [rows] = await pool.query(
-            `SELECT user_id FROM users_account WHERE user_id = ? LIMIT 1`,
+            `SELECT user_id, account_type 
+             FROM users_account 
+             WHERE user_id = ? 
+             LIMIT 1`,
             [user_id]
         );
 
         if (rows.length === 0) {
             await logAction({
                 user_id,
-                action: "DELETED_CUSTOMER",
+                action: "DELETE_AGENT",
                 log_message: "Attempted deleting account but user not found",
                 status: "FAILED",
                 action_by: admin_id
@@ -385,19 +451,43 @@ exports.deleteCustomer = async (req, res) => {
             return res.status(404).json({ status: false, message: "User not found" });
         }
 
-        await pool.query(`UPDATE users_account SET status = 2 WHERE user_id = ?`, [user_id]);
+        const account = rows[0];
+
+        // Ensure account is an AGENT
+        if (account.account_type !== "AGENT") {
+            await logAction({
+                user_id,
+                action: "DELETE_AGENT",
+                log_message: `Attempted deletion but account_type is ${account.account_type}, not AGENT.`,
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({
+                status: false,
+                message: "Only AGENT accounts can be deleted"
+            });
+        }
+
+        // Soft delete: update status = 2
+        await pool.query(
+            `UPDATE users_account 
+             SET status = 2 
+             WHERE user_id = ?`,
+            [user_id]
+        );
 
         await logAction({
             user_id,
-            action: "DELETED_CUSTOMER",
-            log_message: `User ${user_id} deleted successfully`,
+            action: "DELETE_AGENT",
+            log_message: `Agent ${user_id} deleted successfully`,
             status: "SUCCESS",
             action_by: admin_id
         });
 
         return res.json({
             status: true,
-            message: "User deleted successfully",
+            message: "Agent deleted successfully"
         });
 
     } catch (err) {
@@ -405,7 +495,7 @@ exports.deleteCustomer = async (req, res) => {
 
         await logAction({
             user_id: req.params.user_id,
-            action: "DELETED_CUSTOMER",
+            action: "DELETE_AGENT",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
             action_by: req.user?.id || null
@@ -419,36 +509,56 @@ exports.deleteCustomer = async (req, res) => {
 
 
 
-exports.restoreCustomer = async (req, res) => {
+
+exports.restoreAgent = async (req, res) => {
     try {
         const { user_id } = req.params;
         const admin_id = req.user?.id || 'SYSTEM';
 
         // Fetch user by ID
         const [rows] = await pool.query(
-            `SELECT user_id, status FROM users_account WHERE user_id = ? LIMIT 1`,
+            `SELECT user_id, status, account_type 
+             FROM users_account 
+             WHERE user_id = ? 
+             LIMIT 1`,
             [user_id]
         );
 
         if (rows.length === 0) {
             await logAction({
                 user_id,
-                action: "RESTORE_CUSTOMER",
+                action: "RESTORE_AGENT",
                 log_message: "Attempted restore but user not found",
                 status: "FAILED",
                 action_by: admin_id
             });
 
-            return res.status(404).json({ status: false, message: "User not found" });
+            return res.status(404).json({ status: false, message: "Agent not found" });
         }
 
-        const currentStatus = rows[0].status;
+        const { status: currentStatus, account_type } = rows[0];
+
+        // Ensure account is AGENT
+        if (account_type !== "AGENT") {
+            await logAction({
+                user_id,
+                action: "RESTORE_AGENT",
+                log_message: `Attempted restore but account_type is ${account_type}, not AGENT.`,
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({
+                status: false,
+                message: "Only AGENT accounts can be restored"
+            });
+        }
 
         // Only allow restore if status is 2 (deleted), 3 (suspended), or 5 (closed)
         if (![2, 3, 5].includes(currentStatus)) {
             await logAction({
                 user_id,
-                action: "RESTORE_CUSTOMER",
+                action: "RESTORE_AGENT",
                 log_message: `Restore failed. Current status is ${currentStatus} (active/not restorable)`,
                 status: "FAILED",
                 action_by: admin_id
@@ -456,24 +566,29 @@ exports.restoreCustomer = async (req, res) => {
 
             return res.status(400).json({
                 status: false,
-                message: "Account is active and cannot be restored"
+                message: "Agent account is active and cannot be restored"
             });
         }
 
-        // Restore account (set status back to 0 = pending)
-        await pool.query(`UPDATE users_account SET status = 0 WHERE user_id = ?`, [user_id]);
+        // Restore account (set status back to 1 = ACTIVE)
+        await pool.query(
+            `UPDATE users_account 
+             SET status = 1 
+             WHERE user_id = ?`,
+            [user_id]
+        );
 
         await logAction({
             user_id,
-            action: "RESTORE_CUSTOMER",
-            log_message: `User ${user_id} restored successfully`,
+            action: "RESTORE_AGENT",
+            log_message: `Agent ${user_id} restored successfully`,
             status: "SUCCESS",
             action_by: admin_id
         });
 
         return res.json({
             status: true,
-            message: "User restored successfully",
+            message: "Agent restored successfully",
             data: { user_id, status: 1 }
         });
 
@@ -482,7 +597,7 @@ exports.restoreCustomer = async (req, res) => {
 
         await logAction({
             user_id: req.params.user_id,
-            action: "RESTORE_CUSTOMER",
+            action: "RESTORE_AGENT",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
             action_by: req.user?.id || null
@@ -496,7 +611,8 @@ exports.restoreCustomer = async (req, res) => {
 
 
 
-exports.updateCustomer = async (req, res) => {
+
+exports.updateAgent = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { first_name, last_name, email_address, phone_number } = req.body;
@@ -510,22 +626,37 @@ exports.updateCustomer = async (req, res) => {
             });
         }
 
-        // Check if user exists
+        // Check if user exists and is an AGENT
         const [rows] = await pool.query(
-            `SELECT user_id FROM users_account WHERE user_id = ? LIMIT 1`,
+            `SELECT user_id, account_type 
+             FROM users_account 
+             WHERE user_id = ? 
+             LIMIT 1`,
             [user_id]
         );
 
         if (rows.length === 0) {
             await logAction({
                 user_id,
-                action: "UPDATE_CUSTOMER",
+                action: "UPDATE_AGENT",
                 log_message: "Attempted update but user not found",
                 status: "FAILED",
                 action_by: admin_id
             });
 
             return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        if (rows[0].account_type !== "AGENT") {
+            await logAction({
+                user_id,
+                action: "UPDATE_AGENT",
+                log_message: "Attempted update but user is not an AGENT",
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({ status: false, message: "User is not an AGENT" });
         }
 
         // Update user record
@@ -538,15 +669,15 @@ exports.updateCustomer = async (req, res) => {
 
         await logAction({
             user_id,
-            action: "UPDATE_CUSTOMER",
-            log_message: `User ${user_id} updated successfully`,
+            action: "UPDATE_AGENT",
+            log_message: `Agent ${user_id} updated successfully`,
             status: "SUCCESS",
             action_by: admin_id
         });
 
         return res.json({
             status: true,
-            message: "User updated successfully",
+            message: "Agent updated successfully",
             data: { user_id, first_name, last_name, email_address, phone_number }
         });
 
@@ -555,7 +686,7 @@ exports.updateCustomer = async (req, res) => {
 
         await logAction({
             user_id: req.params.user_id,
-            action: "UPDATE_CUSTOMER",
+            action: "UPDATE_AGENT",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
             action_by: req.user?.id || null
@@ -568,7 +699,8 @@ exports.updateCustomer = async (req, res) => {
 
 
 
-exports.changeUserPassword = async (req, res) => {
+
+exports.changeAgentPassword = async (req, res) => {
   const { user_id } = req.params;
   const { password } = req.body;
   const admin_id = req.user?.id || "SYSTEM";
@@ -591,9 +723,9 @@ exports.changeUserPassword = async (req, res) => {
     // Hash password
     const hashedPassword = await hashPassword(password, 10);
 
-    // Ensure user exists
+    // Ensure user exists and is an AGENT
     const [rows] = await pool.query(
-      "SELECT user_id FROM users_account WHERE user_id = ?",
+      "SELECT user_id, account_type FROM users_account WHERE user_id = ? LIMIT 1",
       [user_id]
     );
 
@@ -609,6 +741,18 @@ exports.changeUserPassword = async (req, res) => {
       return res.status(404).json({ status: false, message: "User not found" });
     }
 
+    if (rows[0].account_type !== "AGENT") {
+      await logAction({
+        user_id,
+        action: "CHANGE_PASSWORD",
+        log_message: `Attempted to change password but user is not an AGENT`,
+        status: "FAILED",
+        action_by: admin_id,
+      });
+
+      return res.status(400).json({ status: false, message: "User is not an AGENT" });
+    }
+
     // Update password
     await pool.query("UPDATE users_account SET password = ? WHERE user_id = ?", [
       hashedPassword,
@@ -621,7 +765,7 @@ exports.changeUserPassword = async (req, res) => {
     await logAction({
       user_id,
       action: "CHANGE_PASSWORD",
-      log_message: `Password changed successfully for user ${user_id}`,
+      log_message: `Password changed successfully for agent ${user_id}`,
       status: "SUCCESS",
       action_by: admin_id,
     });
@@ -644,3 +788,4 @@ exports.changeUserPassword = async (req, res) => {
     return res.status(500).json({ status: false, message: "Server error" });
   }
 };
+
