@@ -23,7 +23,7 @@ exports.fetchAllCustomers = async (req, res) => {
         let offset = (page - 1) * limit;
 
         // Get total count
-        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='USER'");
+        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='USER' AND status='ACTIVE'");
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
@@ -32,6 +32,7 @@ exports.fetchAllCustomers = async (req, res) => {
             `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created 
             FROM users_account 
             WHERE account_type = 'USER'
+            AND status='ACTIVE'
             ORDER BY date_created DESC
             LIMIT ? OFFSET ?`,
             [limit, offset]
