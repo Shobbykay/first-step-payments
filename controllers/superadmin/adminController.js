@@ -124,7 +124,7 @@ exports.adminListOtps = async (req, res) => {
     let { page } = req.query;
     page = parseInt(page) || 1;
 
-    const limit = 30;
+    const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
 
     // Fetch paginated OTPs

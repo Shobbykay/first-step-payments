@@ -19,7 +19,7 @@ exports.fetchAllAgents = async (req, res) => {
     try {
 
         let page = parseInt(req.query.page) || 1;
-        let limit = 30;
+        let limit = parseInt(req.query.limit) || 10;
         let offset = (page - 1) * limit;
 
         // Get total count
@@ -69,7 +69,7 @@ exports.fetchAllAgents = async (req, res) => {
 exports.fetchSuspendedAgents = async (req, res) => {
   try {
     let page = parseInt(req.query.page) || 1;
-    let limit = 30;
+    let limit = parseInt(req.query.limit) || 10;
     let offset = (page - 1) * limit;
 
     // Get total count of suspended AGENT users
@@ -129,7 +129,7 @@ exports.fetchSuspendedAgents = async (req, res) => {
 exports.fetchArchiveAgents = async (req, res) => {
     try {
         let page = parseInt(req.query.page) || 1;
-        let limit = 30;
+        let limit = parseInt(req.query.limit) || 10;
         let offset = (page - 1) * limit;
 
         // Get total count of archived users (deleted or closed)

@@ -7,7 +7,7 @@ const logAction = require("../../utils/logger");
 exports.fetchLogs = async (req, res) => {
   try {
     let page = parseInt(req.query.page) || 1;
-    let limit = 30;
+    let limit = parseInt(req.query.limit) || 10;
     let offset = (page - 1) * limit;
 
     // Get total count

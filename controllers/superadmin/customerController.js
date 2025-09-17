@@ -19,7 +19,7 @@ exports.fetchAllCustomers = async (req, res) => {
     try {
 
         let page = parseInt(req.query.page) || 1;
-        let limit = 30;
+        let limit = parseInt(req.query.limit) || 10;
         let offset = (page - 1) * limit;
 
         // Get total count
@@ -70,7 +70,7 @@ exports.fetchAllCustomers = async (req, res) => {
 exports.fetchSuspendedCustomers = async (req, res) => {
     try {
         let page = parseInt(req.query.page) || 1;
-        let limit = 30;
+        let limit = parseInt(req.query.limit) || 10;
         let offset = (page - 1) * limit;
 
         // Get total count of suspended users
@@ -123,7 +123,7 @@ exports.fetchSuspendedCustomers = async (req, res) => {
 exports.fetchArchiveCustomers = async (req, res) => {
     try {
         let page = parseInt(req.query.page) || 1;
-        let limit = 30;
+        let limit = parseInt(req.query.limit) || 10;
         let offset = (page - 1) * limit;
 
         // Get total count of archived users (deleted or closed)
