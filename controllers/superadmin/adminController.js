@@ -38,7 +38,7 @@ exports.addAdminUser = async (req, res) => {
     // Insert admin user
     await pool.query(
       `INSERT INTO admin_users (user_id, fullname, email_address, role, status, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [user_id, fullname, email_address, role, status, admin_id]
     );
 
