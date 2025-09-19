@@ -77,7 +77,7 @@ exports.addAdminUser = async (req, res) => {
 
       To activate your account, please click the link below to set up your password:<br><br>
 
-      <a href="${setupUrl}/setup-password?msn=${encodeURIComponent(otp)}" style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Set Up My Password</a><br><br>
+      <a href="${setupUrl}/auth/setup-password?msn=${encodeURIComponent(otp)}" style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">Set Up My Password</a><br><br>
 
       This link will expire in <strong>1 hour</strong>. If the link has expired, you can request a new setup link from the login page.<br><br>If you did not expect this email, please contact our support team immediately.<br><br>
 

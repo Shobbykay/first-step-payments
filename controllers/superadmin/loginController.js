@@ -251,6 +251,17 @@ exports.reset = async (req, res) => {
         [email_address]
         );
 
+        // Fetch user by ID
+        const [rows] = await pool.query(
+            `SELECT fullname
+             FROM admin_users 
+             WHERE email_address = ? 
+             LIMIT 1`,
+            [email_address]
+        );
+
+        const fullname = rows[0].fullname || '';
+
         // Send notification email
         await sendMail(
             email_address,
