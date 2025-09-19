@@ -146,7 +146,7 @@ exports.forgot = async (req, res) => {
         );
 
         // build reset link
-        const resetLink = `${process.env.APP_URL || "http://localhost:3000"}/reset-password/${resetToken}`;
+        const resetLink = `${process.env.APP_URL || "http://localhost:3000"}/auth/new-password?resettoken=${resetToken}`;
 
         // Send notification email
         await sendMail(
