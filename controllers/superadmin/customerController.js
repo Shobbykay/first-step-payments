@@ -122,13 +122,14 @@ exports.fetchSuspendedCustomers = async (req, res) => {
 
 exports.fetchArchiveCustomers = async (req, res) => {
     try {
+        //should show only CLOSED accounts
         let page = parseInt(req.query.page) || 1;
         let limit = parseInt(req.query.limit) || 10;
         let offset = (page - 1) * limit;
 
         // Get total count of archived users (deleted or closed)
         const [countResult] = await pool.query(
-            "SELECT COUNT(*) as total FROM users_account WHERE status IN (2, 5) AND account_type = 'USER'"
+            "SELECT COUNT(*) as total FROM users_account WHERE status IN (5) AND account_type = 'USER'"
         );
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
@@ -137,7 +138,7 @@ exports.fetchArchiveCustomers = async (req, res) => {
         const [rows] = await pool.query(
             `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, closure_reason
              FROM users_account 
-             WHERE status IN (2, 5)
+             WHERE status IN (5)
              AND account_type = 'USER'
              ORDER BY date_created DESC
              LIMIT ? OFFSET ?`,
