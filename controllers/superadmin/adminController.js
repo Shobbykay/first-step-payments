@@ -545,3 +545,50 @@ exports.reactivateAdmin = async (req, res) => {
   }
 };
 
+
+
+
+
+exports.listAdminUsers = async (req, res) => {
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    let offset = (page - 1) * limit;
+
+    // Get total count of admin users
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM admin_users"
+    );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch paginated admin users
+    const [rows] = await pool.query(
+      `SELECT * 
+       FROM admin_users
+       ORDER BY date_created DESC 
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    return res.json({
+      status: true,
+      message: "Admin Users fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit,
+        },
+        records: rows,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error",
+    });
+  }
+};

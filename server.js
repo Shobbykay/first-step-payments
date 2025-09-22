@@ -43,8 +43,32 @@ app.use('/api/v1/linked_accounts', linkedAccountsRoutes);
 app.use('/api/v1/superadmin', superadminRoutes);
 
 
-//superadmin routes
+//health-check route
+app.get("/api/v1/health-check", async (req, res) => {
+  const healthStatus = {
+    status: true,
+    message: "Server is healthy",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    checks: {
+      database: "pending"
+    }
+  };
 
+  try {
+    // Check database connectivity
+    await pool.query("SELECT 1");
+    healthStatus.checks.database = "connected";
+  } catch (error) {
+    healthStatus.status = false;
+    healthStatus.message = "One or more services are unhealthy";
+    healthStatus.checks.database = "disconnected";
+    healthStatus.error = error.message;
+    return res.status(500).json(healthStatus);
+  }
+
+  res.status(200).json(healthStatus);
+});
 
 
 // Root

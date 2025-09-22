@@ -4,7 +4,7 @@ const { login, forgot, reset, confirmResetToken, logoutAdmin } = require('../con
 const { fetchLogs, fetchSingleLog } = require('../controllers/superadmin/logController');
 const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, updateCustomer, changeUserPassword } = require('../controllers/superadmin/customerController');
 const { fetchAllAgents, updateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
-const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole } = require('../controllers/superadmin/adminController');
+const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers } = require('../controllers/superadmin/adminController');
 const auth = require("../middleware/auth");
 
 //auth
@@ -25,6 +25,7 @@ router.get('/verify_otp/:otp', verifyAdminOtp);
 router.post('/deactivate', deactivateAdmin);
 router.post('/reactivate', reactivateAdmin);
 router.post('/change_role', changeRole);
+router.get('/list_user_roles', listAdminUsers);
 
 
 

@@ -530,7 +530,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT user_id, first_name, last_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created, agent_id FROM users_account WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, first_name, last_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created, agent_id, profile_img FROM users_account WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
@@ -575,7 +575,7 @@ exports.login = async (req, res) => {
       [user.user_id]
     );
 
-    const is_transaction_pin_set = (rows_pin.length > 0) ? true : false;
+    const is_transaction_pin_set = (rows_pin.length > 0) ? true : false;  
 
     // Send notification email
     await sendMail(
@@ -598,6 +598,7 @@ exports.login = async (req, res) => {
       account_type: user.account_type,
       security_question: user.security_question,
       is_transaction_pin_set,
+      profile_img: user.profile_img,
       account_status: status_[user.status],
       account_created: user.date_created,
     };
@@ -607,6 +608,43 @@ exports.login = async (req, res) => {
       responseData.agent_id = user.agent_id;
       responseData.business_name = user.business_name;
       responseData.business_address = user.business_address;
+
+      // check if business info is set
+      const [rows_doc] = await pool.query(
+        "SELECT * FROM agents_documents WHERE email_address = ?",
+        [user.email_address]
+      );
+
+      let is_doc_verified = (rows_doc.length > 0) ? true : false;
+
+      if (is_doc_verified){
+        responseData.business_name = rows_doc[0].business_name;
+        responseData.business_address = rows_doc[0].business_address;
+        responseData.location = rows_doc[0].location;
+        
+        try {
+          responseData.business_hours = JSON.parse(rows_doc[0].business_hours);
+        } catch (e) {
+          responseData.business_hours = rows_doc[0].business_hours; // fallback if parsing fails
+        }
+
+        responseData.is_verified = rows_doc[0].is_verified;
+
+        if (rows_doc[0].is_verified == 'VERIFIED'){
+          is_doc_verified = true;
+        } else{
+          is_doc_verified = false;
+        }
+
+        //add the documents
+        responseData.documents = {
+          government_id: rows_doc[0].government_id,
+          utility_bill: rows_doc[0].utility_bill,
+          passport_photo: rows_doc[0].passport_photo
+        };
+      }
+
+      responseData.is_doc_verified = is_doc_verified;
     }
 
     return res.status(200).json({
