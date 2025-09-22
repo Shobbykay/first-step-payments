@@ -5,7 +5,7 @@ const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ["image/jpeg", "image/png", "application/pdf"];
-  if (!allowedTypes.includes(file.mimetype)) {
+  if (!allowedTypes.includes(file.mimetype) && file.mimetype !== "application/octet-stream") {
     return cb(new Error("Only JPG, PNG, and PDF files are allowed"), false);
   }
   if (file.size > 5 * 1024 * 1024) { // 5MB
