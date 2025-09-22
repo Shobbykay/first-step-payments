@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { login, forgot, reset, confirmResetToken, logoutAdmin } = require('../controllers/superadmin/loginController');
 const { fetchLogs, fetchSingleLog } = require('../controllers/superadmin/logController');
-const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, updateCustomer, changeUserPassword } = require('../controllers/superadmin/customerController');
+const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, reinstateCustomer, updateCustomer, changeUserPassword } = require('../controllers/superadmin/customerController');
 const { fetchAllAgents, updateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
 const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers } = require('../controllers/superadmin/adminController');
 const auth = require("../middleware/auth");
@@ -38,6 +38,7 @@ router.post('/customer/suspend/:user_id', auth, suspendCustomer);
 router.post('/customer/close/:user_id', auth, closeCustomer);
 router.post('/customer/delete/:user_id', auth, deleteCustomer);
 router.post('/customer/restore/:user_id', auth, restoreCustomer);
+router.post('/customer/reinstate/:user_id', auth, reinstateCustomer);
 router.post('/customer/update/:user_id', auth, updateCustomer);
 router.post('/customer/password/:user_id', auth, changeUserPassword);
 

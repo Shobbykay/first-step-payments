@@ -423,6 +423,7 @@ exports.deleteCustomer = async (req, res) => {
 
 exports.restoreCustomer = async (req, res) => {
     try {
+        //Restore is for CLOSED account
         const { user_id } = req.params;
         const admin_id = req.user?.id || 'SYSTEM';
 
@@ -445,6 +446,13 @@ exports.restoreCustomer = async (req, res) => {
         }
 
         const currentStatus = rows[0].status;
+
+        if (currentStatus != 5){
+            return res.status(400).json({
+                status: false,
+                message: "You can only restore a CLOSED account"
+            });
+        }
 
         // Only allow restore if status is 2 (deleted), 3 (suspended), or 5 (closed)
         if (![2, 3, 5].includes(currentStatus)) {
@@ -485,6 +493,92 @@ exports.restoreCustomer = async (req, res) => {
         await logAction({
             user_id: req.params.user_id,
             action: "RESTORE_CUSTOMER",
+            log_message: `Server error: ${err.message}`,
+            status: "FAILED",
+            action_by: req.user?.id || null
+        });
+
+        return res.status(500).json({ status: false, message: "Server error" });
+    }
+};
+
+
+
+
+
+
+exports.reinstateCustomer = async (req, res) => {
+    try {
+        //Restore is for CLOSED account
+        const { user_id } = req.params;
+        const admin_id = req.user?.id || 'SYSTEM';
+
+        // Fetch user by ID
+        const [rows] = await pool.query(
+            `SELECT user_id, status FROM users_account WHERE user_id = ? LIMIT 1`,
+            [user_id]
+        );
+
+        if (rows.length === 0) {
+            await logAction({
+                user_id,
+                action: "RE_INSTATE_CUSTOMER",
+                log_message: "Attempted Reinstating but user not found",
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        const currentStatus = rows[0].status;
+
+        if (currentStatus != 3){
+            return res.status(400).json({
+                status: false,
+                message: "You can only Reinstate a SUSPENDED account"
+            });
+        }
+
+        // Only allow restore if status is 2 (deleted), 3 (suspended), or 5 (closed)
+        if (![2, 3, 5].includes(currentStatus)) {
+            await logAction({
+                user_id,
+                action: "RE_INSTATE_CUSTOMER",
+                log_message: `Reinstate failed. Current status is ${currentStatus} (active/not reinstatable)`,
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({
+                status: false,
+                message: "Account is active and cannot be Reinstated"
+            });
+        }
+
+        // Restore account (set status back to 0 = pending)
+        await pool.query(`UPDATE users_account SET status = 0 WHERE user_id = ?`, [user_id]);
+
+        await logAction({
+            user_id,
+            action: "RE_INSTATE_CUSTOMER",
+            log_message: `User ${user_id} Reinstated successfully`,
+            status: "SUCCESS",
+            action_by: admin_id
+        });
+
+        return res.json({
+            status: true,
+            message: "User Reinstated successfully",
+            data: { user_id, status: 1 }
+        });
+
+    } catch (err) {
+        console.error(err);
+
+        await logAction({
+            user_id: req.params.user_id,
+            action: "RE_INSTATE_CUSTOMER",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
             action_by: req.user?.id || null
