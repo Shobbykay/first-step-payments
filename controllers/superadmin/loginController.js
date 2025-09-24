@@ -266,7 +266,7 @@ exports.reset = async (req, res) => {
         await sendMail(
             email_address,
             "FirstStep Admin Password Reset Success",
-            `Hello <strong>${fullname}</strong>,<br><br>Your password reset was successful, please attempt a login https://yetziratlabs.com.ng/fsf-admin/login.<br><br>If you did not perform this action, please contact super admin immediately.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
+            `Hello <strong>${fullname}</strong>,<br><br>Your password reset was successful, please attempt a login https://yetziratlabs.com.ng/auth/login.<br><br>If you did not perform this action, please contact super admin immediately.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
         );
 
         return res.json({ status: true, message: "Password has been reset successfully" });
