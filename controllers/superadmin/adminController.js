@@ -64,7 +64,7 @@ exports.addAdminUser = async (req, res) => {
     });
 
 
-    const setupUrl = process.env.ADMIN_SETUP_URL || 'http://yetziratlabs.com.ng/fsf-admin';
+    const setupUrl = process.env.ADMIN_SETUP_URL || 'http://yetziratlabs.com.ng';
 
 
     // Send notification email
