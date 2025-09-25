@@ -19,6 +19,7 @@ const uploadToS3 = async (file, folder) => {
 exports.BecomeAgent = async (req, res) => {
   try {
     const { email_address, business_name, business_address, location, business_hours } = req.body;
+    console.log(req.body);
 
     // Validate required fields
     if (!email_address || !business_name || !business_address || !location || !business_hours) {
