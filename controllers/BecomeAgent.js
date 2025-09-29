@@ -81,6 +81,9 @@ exports.BecomeAgent = async (req, res) => {
         uploadedFiles.passport_photo
     ]);
 
+
+    // Change ACCOUNT TYPE to AGENT after approval and send MAIL
+
     return res.json({
       success: true,
       message: "Agent application submitted",

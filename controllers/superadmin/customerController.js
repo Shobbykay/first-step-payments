@@ -136,7 +136,7 @@ exports.fetchArchiveCustomers = async (req, res) => {
 
         // Fetch paginated archived users
         const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, closure_reason
+            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, closure_reason, closed_by, closed_date
              FROM users_account 
              WHERE status IN (5)
              AND account_type = 'USER'
@@ -182,7 +182,7 @@ exports.fetchSingleCustomer = async (req, res) => {
     
         // Fetch user by ID
         const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created
+            `SELECT user_id, account_type, agent_id, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, security_answer, profile_img, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, date_created, date_updated
             FROM users_account 
             WHERE user_id = ? 
             LIMIT 1`,
@@ -223,7 +223,7 @@ exports.suspendCustomer = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { reason } = req.body;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.email || 'SYSTEM';
 
         // Ensure reason is provided
         if (!reason || reason.trim() === "") {
@@ -281,7 +281,7 @@ exports.suspendCustomer = async (req, res) => {
             action: "SUSPEND_CUSTOMER",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
-            action_by: req.user?.id || null
+            action_by: req.user?.email || null
         });
 
         return res.status(500).json({ status: false, message: "Server error" });
@@ -295,7 +295,7 @@ exports.closeCustomer = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { reason } = req.body;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.email || 'SYSTEM';
 
         // Ensure reason is provided
         if (!reason || reason.trim() === "") {
@@ -326,9 +326,10 @@ exports.closeCustomer = async (req, res) => {
         // Update status = 5 (Closed) and store closure reason
         await pool.query(
             `UPDATE users_account 
-             SET status = 5, closure_reason = ? 
+             SET status = 5, closure_reason = ?, 
+             closed_by = ?, closed_date = NOW()
              WHERE user_id = ?`,
-            [reason, user_id]
+            [reason, admin_id, user_id]
         );
 
         await logAction({
@@ -353,7 +354,7 @@ exports.closeCustomer = async (req, res) => {
             action: "CLOSED_CUSTOMER",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
-            action_by: req.user?.id || null
+            action_by: req.user?.email || null
         });
 
         return res.status(500).json({ status: false, message: "Server error" });
@@ -368,7 +369,7 @@ exports.closeCustomer = async (req, res) => {
 exports.deleteCustomer = async (req, res) => {
     try {
         const { user_id } = req.params;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.email || 'SYSTEM';
 
         const [rows] = await pool.query(
             `SELECT user_id FROM users_account WHERE user_id = ? LIMIT 1`,
@@ -410,7 +411,7 @@ exports.deleteCustomer = async (req, res) => {
             action: "DELETED_CUSTOMER",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
-            action_by: req.user?.id || null
+            action_by: req.user?.email || null
         });
 
         return res.status(500).json({ status: false, message: "Server error" });
@@ -425,7 +426,7 @@ exports.restoreCustomer = async (req, res) => {
     try {
         //Restore is for CLOSED account
         const { user_id } = req.params;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.email || 'SYSTEM';
 
         // Fetch user by ID
         const [rows] = await pool.query(
@@ -495,7 +496,7 @@ exports.restoreCustomer = async (req, res) => {
             action: "RESTORE_CUSTOMER",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
-            action_by: req.user?.id || null
+            action_by: req.user?.email || null
         });
 
         return res.status(500).json({ status: false, message: "Server error" });
@@ -511,7 +512,7 @@ exports.reinstateCustomer = async (req, res) => {
     try {
         //Restore is for CLOSED account
         const { user_id } = req.params;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.email || 'SYSTEM';
 
         // Fetch user by ID
         const [rows] = await pool.query(
@@ -581,7 +582,7 @@ exports.reinstateCustomer = async (req, res) => {
             action: "RE_INSTATE_CUSTOMER",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
-            action_by: req.user?.id || null
+            action_by: req.user?.email || null
         });
 
         return res.status(500).json({ status: false, message: "Server error" });
@@ -596,7 +597,7 @@ exports.updateCustomer = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { first_name, last_name, email_address, phone_number } = req.body;
-        const admin_id = req.user?.id || 'SYSTEM';
+        const admin_id = req.user?.email || 'SYSTEM';
 
         // Validate required fields
         if (!first_name || !last_name || !email_address || !phone_number) {
@@ -654,7 +655,7 @@ exports.updateCustomer = async (req, res) => {
             action: "UPDATE_CUSTOMER",
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
-            action_by: req.user?.id || null
+            action_by: req.user?.email || null
         });
 
         return res.status(500).json({ status: false, message: "Server error" });
@@ -667,7 +668,7 @@ exports.updateCustomer = async (req, res) => {
 exports.changeUserPassword = async (req, res) => {
   const { user_id } = req.params;
   const { password } = req.body;
-  const admin_id = req.user?.id || "SYSTEM";
+  const admin_id = req.user?.email || "SYSTEM";
 
   if (!password) {
     return res.status(400).json({ status: false, message: "Password is required" });

@@ -3,8 +3,9 @@ const router = express.Router();
 const { login, forgot, reset, confirmResetToken, logoutAdmin } = require('../controllers/superadmin/loginController');
 const { fetchLogs, fetchSingleLog } = require('../controllers/superadmin/logController');
 const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, reinstateCustomer, updateCustomer, changeUserPassword } = require('../controllers/superadmin/customerController');
-const { fetchAllAgents, updateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
+const { fetchAllAgents, updateAgent, reinstateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
 const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers } = require('../controllers/superadmin/adminController');
+const { createPrefunding, listPrefunding } = require('../controllers/superadmin/PrefundController');
 const auth = require("../middleware/auth");
 
 //auth
@@ -56,6 +57,15 @@ router.post('/agent/delete/:user_id', auth, deleteAgent);
 router.post('/agent/restore/:user_id', auth, restoreAgent);
 router.post('/agent/password/:user_id', auth, changeAgentPassword);
 router.post('/agent/update/:user_id', auth, updateAgent);
+router.post('/agent/reinstate/:user_id', auth, reinstateAgent);
+
+
+
+// Agent Prefunding
+router.post('/agent/prefund', auth, createPrefunding);
+router.get('/agent/prefund/list', auth, listPrefunding);
+
+
 
 
 //logs

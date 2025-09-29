@@ -23,7 +23,7 @@ exports.fetchAllAgents = async (req, res) => {
         let offset = (page - 1) * limit;
 
         // Get total count
-        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='AGENT'");
+        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='AGENT' AND status IN (0,1)");
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
@@ -81,7 +81,7 @@ exports.fetchSuspendedAgents = async (req, res) => {
 
     // Fetch paginated suspended AGENTs
     const [rows] = await pool.query(
-      `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, suspension_reason
+      `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, suspension_reason, suspended_by, suspended_date
        FROM users_account 
        WHERE status = 3
        AND account_type = 'AGENT'
@@ -185,9 +185,9 @@ exports.fetchSingleAgent = async (req, res) => {
   try {
     const { user_id } = req.params;
 
-    // Fetch user by ID
+    // Fetch agent user by ID
     const [rows] = await pool.query(
-      `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created
+      `SELECT user_id, account_type, agent_id, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, security_answer, profile_img, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, date_created, date_updated
        FROM users_account 
        WHERE user_id = ? 
        LIMIT 1`,
@@ -202,6 +202,7 @@ exports.fetchSingleAgent = async (req, res) => {
     }
 
     const userRecord = rows[0];
+    const agent_email = userRecord.email_address;
 
     // Ensure the account is an AGENT
     if (userRecord.account_type !== "AGENT") {
@@ -211,11 +212,29 @@ exports.fetchSingleAgent = async (req, res) => {
       });
     }
 
+
+    //check for documents
+    const [rows_] = await pool.query(
+      `SELECT *
+       FROM agents_documents 
+       WHERE email_address = ? 
+       LIMIT 1`,
+      [agent_email]
+    );
+
+    let business_details = {};
+
+    if (rows_.length === 0) {
+      business_details.is_verified = "NOT_UPLOADED";
+    } else{
+        business_details = rows_[0];
+    }
+
     // Format user
     const user = {
       ...userRecord,
-      kyc_status: statusMap[userRecord.status] || "UNKNOWN",
-      kyc_documents: {}, // placeholder, can be replaced with real docs
+    //   kyc_status: statusMap[userRecord.status] || "UNKNOWN",
+      business_details: business_details, 
     };
 
     // Remove numeric status
@@ -239,7 +258,7 @@ exports.suspendAgent = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { reason } = req.body;
-        const admin_id = req.user?.id || "SYSTEM";
+        const admin_id = req.user?.email || "SYSTEM";
 
         // Ensure reason is provided
         if (!reason || reason.trim() === "") {
@@ -291,9 +310,10 @@ exports.suspendAgent = async (req, res) => {
         // Update status = 3 (Suspended) and save reason
         await pool.query(
             `UPDATE users_account 
-             SET status = 3, suspension_reason = ? 
+             SET status = 3, suspension_reason = ?,
+             suspended_by = ?, suspended_date = NOW() 
              WHERE user_id = ?`,
-            [reason, user_id]
+            [reason, admin_id, user_id]
         );
 
         await logAction({
@@ -334,7 +354,7 @@ exports.closeAgent = async (req, res) => {
     try {
         const { user_id } = req.params;
         const { reason } = req.body;
-        const admin_id = req.user?.id || "SYSTEM";
+        const admin_id = req.user?.email || "SYSTEM";
 
         // Ensure reason is provided
         if (!reason || reason.trim() === "") {
@@ -386,9 +406,10 @@ exports.closeAgent = async (req, res) => {
         // Update status = 5 (Closed) and store closure reason
         await pool.query(
             `UPDATE users_account 
-             SET status = 5, closure_reason = ? 
+             SET status = 5, closure_reason = ?,
+             closed_by = ?, closed_date = NOW()
              WHERE user_id = ?`,
-            [reason, user_id]
+            [reason, admin_id, user_id]
         );
 
         await logAction({
@@ -601,6 +622,109 @@ exports.restoreAgent = async (req, res) => {
             log_message: `Server error: ${err.message}`,
             status: "FAILED",
             action_by: req.user?.id || null
+        });
+
+        return res.status(500).json({ status: false, message: "Server error" });
+    }
+};
+
+
+
+
+
+
+exports.reinstateAgent = async (req, res) => {
+    try {
+        //Restore is for CLOSED account
+        const { user_id } = req.params;
+        const admin_id = req.user?.email || 'SYSTEM';
+
+        // Fetch user by ID
+        const [rows] = await pool.query(
+            `SELECT user_id, status FROM users_account WHERE user_id = ? LIMIT 1`,
+            [user_id]
+        );
+
+        if (rows.length === 0) {
+            await logAction({
+                user_id,
+                action: "RE_INSTATE_CUSTOMER",
+                log_message: "Attempted Reinstating but user not found",
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(404).json({ status: false, message: "User not found" });
+        }
+
+        // const currentStatus = rows[0].status;
+        const { status: currentStatus, account_type } = rows[0];
+
+        if (currentStatus != 3){
+            return res.status(400).json({
+                status: false,
+                message: "You can only Reinstate a SUSPENDED account"
+            });
+        }
+
+        // Only allow restore if status is 2 (deleted), 3 (suspended), or 5 (closed)
+        if (![2, 3, 5].includes(currentStatus)) {
+            await logAction({
+                user_id,
+                action: "RE_INSTATE_CUSTOMER",
+                log_message: `Reinstate failed. Current status is ${currentStatus} (active/not reinstatable)`,
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({
+                status: false,
+                message: "Account is active and cannot be Reinstated"
+            });
+        }
+
+        // Ensure account is AGENT
+        if (account_type !== "AGENT") {
+            await logAction({
+                user_id,
+                action: "RESTORE_AGENT",
+                log_message: `Attempted restore but account_type is ${account_type}, not AGENT.`,
+                status: "FAILED",
+                action_by: admin_id
+            });
+
+            return res.status(400).json({
+                status: false,
+                message: "Only AGENT accounts can be Reinstated"
+            });
+        }
+
+        // Restore account (set status back to 0 = pending)
+        await pool.query(`UPDATE users_account SET status = 0 WHERE user_id = ?`, [user_id]);
+
+        await logAction({
+            user_id,
+            action: "RE_INSTATE_CUSTOMER",
+            log_message: `User ${user_id} Reinstated successfully`,
+            status: "SUCCESS",
+            action_by: admin_id
+        });
+
+        return res.json({
+            status: true,
+            message: "User Reinstated successfully",
+            data: { user_id, status: 1 }
+        });
+
+    } catch (err) {
+        console.error(err);
+
+        await logAction({
+            user_id: req.params.user_id,
+            action: "RE_INSTATE_CUSTOMER",
+            log_message: `Server error: ${err.message}`,
+            status: "FAILED",
+            action_by: req.user?.email || null
         });
 
         return res.status(500).json({ status: false, message: "Server error" });

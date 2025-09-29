@@ -9,7 +9,7 @@ const { v4: uuidv4 } = require("uuid");
 
 exports.addAdminUser = async (req, res) => {
   const { fullname, email_address, role } = req.body;
-  const admin_id = req.user?.id || "SYSTEM";
+  const admin_id = req.user?.email || "SYSTEM";
 
   try {
     // Validate required fields
@@ -161,7 +161,7 @@ exports.adminListOtps = async (req, res) => {
 exports.changeRole = async (req, res) => {
   try {
     const { email_address, role } = req.body;
-    const admin_id = req.user?.id || "SYSTEM";
+    const admin_id = req.user?.email || "SYSTEM";
 
     const admin_email = req.user?.email_address || "";
 
@@ -407,7 +407,7 @@ exports.verifyAdminOtp = async (req, res) => {
 exports.deactivateAdmin = async (req, res) => {
   try {
     const { email_address } = req.body;
-    const admin_id = req.user?.id || "SYSTEM";
+    const admin_id = req.user?.email || "SYSTEM";
 
     if (!email_address) {
       return res.status(400).json({
@@ -479,7 +479,7 @@ exports.deactivateAdmin = async (req, res) => {
 exports.reactivateAdmin = async (req, res) => {
   try {
     const { email_address } = req.body;
-    const admin_id = req.user?.id || "SYSTEM";
+    const admin_id = req.user?.email || "SYSTEM";
 
     if (!email_address) {
       return res.status(400).json({
