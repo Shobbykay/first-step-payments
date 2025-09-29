@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const pool = require('../services/db');
 
+// MOBILE
 module.exports = async(req, res, next) => {
   try {
     // Get token from headers (Bearer <token>)
