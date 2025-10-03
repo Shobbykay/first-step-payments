@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 const { hashPassword } = require("../utils/utilities");
 const { sendMail } = require("../utils/mailHelper");
 const bcrypt = require("bcrypt");
+const axios = require("axios");
 
 
 
@@ -134,4 +135,71 @@ exports.remove_user_accounts = async (req, res) => {
     });
   }
   
+};
+
+
+
+
+exports.fetchBankList = async (req, res) => {
+  try {
+    const response = await axios.get("https://api.paystack.co/bank", {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+      },
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Bank list fetched successfully",
+      data: response.data.data, // list of banks
+    });
+  } catch (error) {
+    console.error("Error fetching bank list:", error.message);
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to fetch bank list",
+      error: error.message,
+    });
+  }
+};
+
+
+
+
+exports.validateBankAccount = async (req, res) => {
+  try {
+    const { account_number, bank_code } = req.body; 
+
+    if (!account_number || !bank_code) {
+      return res.status(400).json({
+        status: false,
+        message: "account_number and bank_code are required",
+      });
+    }
+
+    const response = await axios.get("https://api.paystack.co/bank/resolve", {
+      headers: {
+        Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+      },
+      params: {
+        account_number,
+        bank_code,
+      },
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Bank account validated successfully",
+      data: response.data.data, // { account_number, account_name, bank_id }
+    });
+  } catch (error) {
+    console.error("Error validating bank account:", error.response?.data || error.message);
+
+    return res.status(500).json({
+      status: false,
+      message: "Failed to validate bank account",
+      error: error.response?.data || error.message,
+    });
+  }
 };
