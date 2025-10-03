@@ -33,6 +33,9 @@ const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const linkedAccountsRoutes = require('./routes/linked_accounts');
 const notificationRoutes = require('./routes/notification');
+const ticketsRoutes = require('./routes/tickets');
+const settingsRoutes = require('./routes/settings');
+const kycRoutes = require('./routes/kyc');
 const superadminRoutes = require('./routes/superadmin');
 
 app.use('/api', helloRoutes);
@@ -40,6 +43,9 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/notification', notificationRoutes);
 app.use('/api/v1/linked_accounts', linkedAccountsRoutes);
+app.use('/api/v1/tickets', ticketsRoutes);
+app.use('/api/v1/kyc', kycRoutes);
+app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/superadmin', superadminRoutes);
 
 

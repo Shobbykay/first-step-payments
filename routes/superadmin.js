@@ -4,8 +4,10 @@ const { login, forgot, reset, confirmResetToken, logoutAdmin } = require('../con
 const { fetchLogs, fetchSingleLog } = require('../controllers/superadmin/logController');
 const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, reinstateCustomer, updateCustomer, changeUserPassword } = require('../controllers/superadmin/customerController');
 const { fetchAllAgents, updateAgent, reinstateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
-const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers } = require('../controllers/superadmin/adminController');
+const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers, updateProfileImage, updateName, changePassword } = require('../controllers/superadmin/adminController');
 const { createPrefunding, listPrefunding } = require('../controllers/superadmin/PrefundController');
+const { transferRate, fxRate, transfersService, getAgentCommissionFees, updateAgentCommissionFee } = require('../controllers/superadmin/FeesController');
+const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC } = require('../controllers/superadmin/KycController');
 const auth = require("../middleware/auth");
 
 //auth
@@ -27,6 +29,9 @@ router.post('/deactivate', deactivateAdmin);
 router.post('/reactivate', reactivateAdmin);
 router.post('/change_role', changeRole);
 router.get('/list_user_roles', listAdminUsers);
+router.post('/update/profile_picture', auth, updateProfileImage);
+router.post('/update/name', auth, updateName);
+router.post('/update/password', auth, changePassword);
 
 
 
@@ -64,6 +69,26 @@ router.post('/agent/reinstate/:user_id', auth, reinstateAgent);
 // Agent Prefunding
 router.post('/agent/prefund', auth, createPrefunding);
 router.get('/agent/prefund/list', auth, listPrefunding);
+
+
+
+
+// Fees & Charges
+router.get('/fees/rates', auth, transferRate);
+router.get('/fees/fxrates', auth, fxRate);
+router.get('/fees/transfer_service', auth, transfersService);
+router.get('/fees/agent/commission_fee', auth, getAgentCommissionFees);
+router.post('/fees/agent/commission_fee/:id', auth, updateAgentCommissionFee);
+
+
+
+
+// kyc
+router.get('/kyc/customer', auth, fetchCustomersKYC);
+router.get('/kyc/agents', auth, fetchAgentsKYC);
+router.post('/kyc/customer/approve', auth, approveCustomerKYC);
+router.post('/kyc/agent/approve', auth, approveAgentKYC);
+router.post('/kyc/agent/reject', auth, rejectAgentKYC);
 
 
 

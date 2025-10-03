@@ -3,8 +3,37 @@ const { sendMail } = require("../../utils/mailHelper");
 const crypto = require('crypto');
 const logAction = require("../../utils/logger");
 const pool = require('../../services/db');
+const path = require("path");
+const multer = require("multer");
 const { sha1Hex, hashPassword, allowedAdminRoles } = require("../../utils/utilities");
 const { v4: uuidv4 } = require("uuid");
+const s3 = require("../../utils/s3");
+const { PutObjectCommand } = require("@aws-sdk/client-s3");
+
+
+
+
+// Multer config
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  fileFilter: (req, file, cb) => {
+    const filetypes = /jpeg|jpg|png/;
+    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = filetypes.test(file.mimetype) || file.mimetype === 'application/octet-stream';
+
+    console.log(extname, mimetype);
+    console.log(file.mimetype, path.extname(file.originalname).toLowerCase());
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error("Only JPG and PNG images are allowed"));
+    }
+  },
+});
+
 
 
 exports.addAdminUser = async (req, res) => {
@@ -589,6 +618,260 @@ exports.listAdminUsers = async (req, res) => {
     return res.status(500).json({
       status: false,
       message: "Server error",
+    });
+  }
+};
+
+
+
+
+
+
+exports.updateProfileImage = [
+  upload.single("profile_image"), // form-data key
+  async (req, res) => {
+    const { user_id, email } = req.user || {};
+    const admin_id = req.user?.email || "SYSTEM";
+
+    try {
+      if (!user_id || !email) {
+        return res.status(400).json({
+          status: false,
+          message: "Missing user credentials",
+        });
+      }
+
+      // Validate file
+      if (!req.file) {
+        return res.status(400).json({
+          status: false,
+          message: "Profile image file is required",
+        });
+      }
+
+      // Generate unique filename
+      const fileExtension = req.file.originalname.split(".").pop();
+      const fileKey = `admin_profiles/${user_id}_${uuidv4()}.${fileExtension}`;
+
+      // Upload to S3
+      const uploadParams = {
+        Bucket: process.env.AWS_S3_BUCKET,
+        Key: fileKey,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+        // ACL: "public-read", // optional
+      };
+
+      await s3.send(new PutObjectCommand(uploadParams));
+
+      // Public file URL
+      const imageUrl = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+
+      // Update DB
+      await pool.query(
+        `UPDATE admin_users SET profile_img = ?, date_modified = NOW() WHERE user_id = ?`,
+        [imageUrl, user_id]
+      );
+
+      // Log action
+      await logAction({
+        user_id,
+        action: "UPDATE_PROFILE_IMAGE",
+        log_message: `Profile image updated successfully for ${email}`,
+        status: "SUCCESS",
+        action_by: admin_id,
+      });
+
+      return res.status(200).json({
+        status: true,
+        message: "Profile image updated successfully",
+        data: {
+          user_id,
+          email_address: email,
+          profile_image: imageUrl,
+        },
+      });
+    } catch (err) {
+      console.error("Update profile image error:", err);
+
+      await logAction({
+        user_id,
+        action: "UPDATE_PROFILE_IMAGE",
+        log_message: `Server error while updating profile image: ${err.message}`,
+        status: "FAILED",
+        action_by: admin_id,
+      });
+
+      return res.status(500).json({
+        status: false,
+        message: "Server error",
+      });
+    }
+  },
+];
+
+
+
+
+exports.updateName = async (req, res) => {
+  const { user_id, email } = req.user || {};
+  const admin_id = req.user?.email || "SYSTEM";
+  const { fullname } = req.body;
+
+  try {
+    if (!user_id || !email) {
+      return res.status(400).json({
+        status: false,
+        message: "Missing user credentials",
+      });
+    }
+
+    if (!fullname || fullname.trim() === "") {
+      return res.status(400).json({
+        status: false,
+        message: "fullname is required",
+      });
+    }
+
+    // Update DB
+    await pool.query(
+      `UPDATE admin_users SET fullname = ?, date_modified = NOW() WHERE user_id = ?`,
+      [fullname.trim(), user_id]
+    );
+
+    // Log action
+    await logAction({
+      user_id,
+      action: "UPDATE_FULLNAME",
+      log_message: `Fullname updated successfully for ${email} → ${fullname}`,
+      status: "SUCCESS",
+      action_by: admin_id,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Fullname updated successfully",
+      data: {
+        user_id,
+        email,
+        fullname,
+      },
+    });
+  } catch (err) {
+    console.error("Update fullname error:", err);
+
+    await logAction({
+      user_id,
+      action: "UPDATE_FULLNAME",
+      log_message: `Server error while updating fullname: ${err.message}`,
+      status: "FAILED",
+      action_by: admin_id,
+    });
+
+    return res.status(500).json({
+      status: false,
+      message: "Server error",
+    });
+  }
+};
+
+
+
+
+
+
+
+
+exports.changePassword = async (req, res) => {
+  const { user_id, email } = req.user || {};
+  const admin_id = req.user?.email || "SYSTEM";
+  const { old_password, new_password } = req.body;
+
+  try {
+    if (!user_id || !email) {
+      return res.status(400).json({
+        status: false,
+        message: "Missing user credentials",
+      });
+    }
+
+    if (!old_password || !new_password) {
+      return res.status(400).json({
+        status: false,
+        message: "Old password and new password are required",
+      });
+    }
+
+    // Validate new password strength
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{7,}$/;
+    if (!passwordRegex.test(new_password)) {
+      return res.status(400).json({
+        status: false,
+        message:
+          "New password must be at least 7 characters, include uppercase, lowercase, number, and special character",
+      });
+    }
+
+    // Get current password from DB
+    const [rows] = await pool.query(
+      "SELECT password FROM admin_users WHERE user_id = ? LIMIT 1",
+      [user_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "Admin user not found",
+      });
+    }
+
+    const currentPassword = rows[0].password;
+
+    // Compare old password
+    const hashedOldPassword = await sha1Hex(old_password);
+    if (hashedOldPassword !== currentPassword) {
+      return res.status(401).json({
+        status: false,
+        message: "Old password is incorrect",
+      });
+    }
+
+    // Hash new password
+    const hashedNewPassword = await sha1Hex(new_password);
+
+    // Update DB
+    await pool.query(
+      "UPDATE admin_users SET password = ?, date_modified = NOW() WHERE user_id = ?",
+      [hashedNewPassword, user_id]
+    );
+
+    // Log action
+    await logAction({
+      user_id,
+      action: "CHANGE_PASSWORD",
+      log_message: `Password changed successfully for ${email}`,
+      status: "SUCCESS",
+      action_by: admin_id,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error("Change password error:", error);
+
+    await logAction({
+      user_id,
+      action: "CHANGE_PASSWORD",
+      log_message: `Server error while changing password: ${error.message}`,
+      status: "FAILED",
+      action_by: admin_id,
+    });
+
+    return res.status(500).json({
+      status: false,
+      message: "Server error while changing password",
     });
   }
 };
