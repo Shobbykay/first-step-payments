@@ -25,10 +25,22 @@ exports.fetchCustomersKYC = async (req, res) => {
       WHERE a.account_type = 'USER'`
     );
 
+    // Transform response to rename 'document_link' → 'document_selfie' when type is SELFIE
+    const formattedData = rows.map((item) => {
+      if (item.document_type === "SELFIE") {
+        return {
+          ...item,
+          document_selfie: item.document_link,
+          document_link: undefined, // optionally remove old key
+        };
+      }
+      return item;
+    });
+
     return res.status(200).json({
       status: true,
       message: "Customer KYC records fetched successfully",
-      data: rows,
+      data: formattedData,
     });
   } catch (err) {
     console.error("Error fetching customer KYC records:", err);
