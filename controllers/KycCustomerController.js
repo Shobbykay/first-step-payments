@@ -11,7 +11,7 @@ const uploadToS3Buffer = require("../utils/s3Upload");
 
 
 // allowed document types
-const ALLOWED_DOC_TYPES = ["DRIVERS_LICENSE", "INTL_PASSPORT", "NATIONAL_ID", "SELFIE"];
+const ALLOWED_DOC_TYPES = ["DRIVERS_LICENSE", "INTL_PASSPORT", "NATIONAL_ID"];
 const ALLOWED_FILE_TYPES = [".jpg", ".jpeg", ".png", ".pdf"];
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -21,8 +21,169 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 
-// UPLOAD KYC DOCUMENTS
+
+
 exports.uploadKycDocuments = [
+  upload.fields([
+    { name: "document", maxCount: 1 },
+    { name: "selfie", maxCount: 1 },
+  ]),
+
+  async (req, res) => {
+    const { user_id } = req.user || {};
+    const { document_type, address } = req.body;
+
+    if (!user_id) {
+      return res.status(401).json({ status: false, message: "Unauthorized" });
+    }
+
+    if (!document_type || !ALLOWED_DOC_TYPES.includes(document_type)) {
+      return res.status(400).json({
+        status: false,
+        message: `document_type is required and must be one of: ${ALLOWED_DOC_TYPES.join(", ")}`,
+      });
+    }
+
+    const documentFile = req.files?.document?.[0];
+    const selfieFile = req.files?.selfie?.[0];
+
+    if (!documentFile) {
+      return res.status(400).json({ status: false, message: "Document file is required" });
+    }
+
+    const validateFile = (file) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      if (!ALLOWED_FILE_TYPES.includes(ext)) {
+        throw new Error("Only JPG, PNG, and PDF files are allowed");
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("File size must not exceed 5MB");
+      }
+    };
+
+    try {
+      // Fetch user details
+      const [userResult] = await pool.query(
+        "SELECT email_address, first_name FROM users_account WHERE user_id = ? LIMIT 1",
+        [user_id]
+      );
+
+      if (userResult.length === 0) {
+        return res.status(404).json({ status: false, message: "User not found" });
+      }
+
+      const userEmail = userResult[0].email_address;
+
+      // --- Upload Main Document ---
+      validateFile(documentFile);
+
+      const [existingDoc] = await pool.query(
+        "SELECT user_id FROM customer_kyc WHERE user_id = ? AND document_type = ? LIMIT 1",
+        [user_id, document_type]
+      );
+
+      let documentUrl = null;
+      let selfieUrl = null;
+      let selfieSkipped = false;
+
+      if (existingDoc.length > 0) {
+        return res.status(200).json({
+          status: false,
+          message: `${document_type} already uploaded for this user`,
+        });
+      }
+
+      // Upload to S3
+      const docFolder = `kyc/${document_type.toLowerCase()}`;
+      const docKey = `${docFolder}/${user_id}_${Date.now()}${path.extname(documentFile.originalname)}`;
+      documentUrl = await uploadToS3Buffer(documentFile.buffer, docKey, documentFile.mimetype);
+
+      // Insert into DB
+      await pool.query(
+        "INSERT INTO customer_kyc (user_id, document_type, document_link) VALUES (?, ?, ?)",
+        [user_id, document_type, documentUrl]
+      );
+
+      await logAction({
+        user_id,
+        action: "UPLOAD_KYC_DOCUMENT",
+        log_message: `Uploaded KYC document: ${document_type}`,
+        status: "SUCCESS",
+        action_by: userEmail,
+      });
+
+      // --- Optional Selfie Upload ---
+      if (selfieFile) {
+        const [existingSelfie] = await pool.query(
+          "SELECT user_id FROM customer_kyc WHERE user_id = ? AND document_type = 'SELFIE' LIMIT 1",
+          [user_id]
+        );
+
+        if (existingSelfie.length > 0) {
+          selfieSkipped = true;
+        } else {
+          validateFile(selfieFile);
+
+          const selfieFolder = `kyc/selfie`;
+          const selfieKey = `${selfieFolder}/${user_id}_${Date.now()}${path.extname(selfieFile.originalname)}`;
+          selfieUrl = await uploadToS3Buffer(selfieFile.buffer, selfieKey, selfieFile.mimetype);
+
+          await pool.query(
+            "INSERT INTO customer_kyc (user_id, document_type, document_link) VALUES (?, 'SELFIE', ?)",
+            [user_id, selfieUrl]
+          );
+
+          await logAction({
+            user_id,
+            action: "UPLOAD_SELFIE",
+            log_message: "Uploaded KYC selfie",
+            status: "SUCCESS",
+            action_by: userEmail,
+          });
+        }
+      }
+
+      // --- Optional Address ---
+      if (address) {
+        await pool.query(
+          "INSERT INTO customer_addresses (user_id, address) VALUES (?, ?) ON DUPLICATE KEY UPDATE address = VALUES(address)",
+          [user_id, address]
+        );
+
+        await logAction({
+          user_id,
+          action: "UPDATE_ADDRESS",
+          log_message: "Updated customer address during KYC upload",
+          status: "SUCCESS",
+          action_by: userEmail,
+        });
+      }
+
+      // --- Response ---
+      return res.status(201).json({
+        status: true,
+        message: `${document_type} uploaded successfully${
+          selfieSkipped ? " (selfie already uploaded, skipped)" : selfieUrl ? " (selfie uploaded too)" : ""
+        }`,
+        data: {
+          document_url: documentUrl,
+          ...(selfieUrl && { selfie_url: selfieUrl }),
+        },
+      });
+    } catch (err) {
+      console.error("Error uploading KYC document:", err);
+      return res.status(500).json({
+        status: false,
+        message: err.message || "Server error while uploading KYC document",
+      });
+    }
+  },
+];
+
+
+
+// UPLOAD KYC DOCUMENTS
+exports.uploadKycDocuments_old = [
   upload.single("document"), // form-data field name: "document"
   async (req, res) => {
     const { user_id } = req.user || {};
