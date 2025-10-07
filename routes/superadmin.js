@@ -8,6 +8,7 @@ const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmi
 const { createPrefunding, listPrefunding } = require('../controllers/superadmin/PrefundController');
 const { transferRate, fxRate, transfersService, getAgentCommissionFees, updateAgentCommissionFee } = require('../controllers/superadmin/FeesController');
 const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC } = require('../controllers/superadmin/KycController');
+const { fetchTickets, fetchSingleTicket, changeTicketStatus } = require('../controllers/superadmin/TicketController');
 const auth = require("../middleware/auth");
 
 //auth
@@ -96,5 +97,14 @@ router.post('/kyc/agent/reject', auth, rejectAgentKYC);
 //logs
 router.get('/logs/all', auth, fetchLogs);
 router.get('/logs/single/:id', auth, fetchSingleLog);
+
+
+
+
+
+//tickets
+router.get('/tickets/all', auth, fetchTickets);
+router.get('/tickets/single/:ticket_id', auth, fetchSingleTicket);
+router.post('/tickets/:ticket_id/status', auth, changeTicketStatus);
 
 module.exports = router;
