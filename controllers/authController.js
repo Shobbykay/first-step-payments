@@ -671,6 +671,7 @@ exports.login = async (req, res) => {
 
     // business details
     if (user.account_type == "AGENT"){
+      responseData.agent_id = user.agent_id;
       responseData.business_name = user.business_name;
       responseData.business_address = user.business_address;
       responseData.location = user.location;
