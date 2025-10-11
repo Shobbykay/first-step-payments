@@ -27,6 +27,7 @@ exports.uploadKycDocuments = [
   upload.fields([
     { name: "document", maxCount: 1 },
     { name: "selfie", maxCount: 1 },
+    { name: "utility_bill", maxCount: 1 },
   ]),
 
   async (req, res) => {
@@ -46,9 +47,10 @@ exports.uploadKycDocuments = [
 
     const documentFile = req.files?.document?.[0];
     const selfieFile = req.files?.selfie?.[0];
+    const utilityBillFile = req.files?.utility_bill?.[0];
 
-    if (!documentFile) {
-      return res.status(400).json({ status: false, message: "Document file is required" });
+    if (!documentFile && !selfieFile && !utilityBillFile && !address) {
+      return res.status(400).json({ status: false, message: "At least one file or address must be provided" });
     }
 
     const validateFile = (file) => {
@@ -74,43 +76,41 @@ exports.uploadKycDocuments = [
 
       const userEmail = userResult[0].email_address;
 
-      // --- Upload Main Document ---
-      validateFile(documentFile);
-
-      const [existingDoc] = await pool.query(
-        "SELECT user_id FROM customer_kyc WHERE user_id = ? AND document_type = ? LIMIT 1",
-        [user_id, document_type]
-      );
-
       let documentUrl = null;
       let selfieUrl = null;
-      let selfieSkipped = false;
+      let utilityBillUrl = null;
 
-      if (existingDoc.length > 0) {
-        return res.status(200).json({
-          status: false,
-          message: `${document_type} already uploaded for this user`,
-        });
+      let skippedDocs = [];
+
+      // --- Upload Main Document ---
+      if (documentFile) {
+        const [existingDoc] = await pool.query(
+          "SELECT user_id FROM customer_kyc WHERE user_id = ? AND document_type = ? LIMIT 1",
+          [user_id, document_type]
+        );
+
+        if (existingDoc.length === 0) {
+          validateFile(documentFile);
+          const docFolder = `kyc/${document_type.toLowerCase()}`;
+          const docKey = `${docFolder}/${user_id}_${Date.now()}${path.extname(documentFile.originalname)}`;
+          documentUrl = await uploadToS3Buffer(documentFile.buffer, docKey, documentFile.mimetype);
+
+          await pool.query(
+            "INSERT INTO customer_kyc (user_id, document_type, document_link) VALUES (?, ?, ?)",
+            [user_id, document_type, documentUrl]
+          );
+
+          await logAction({
+            user_id,
+            action: "UPLOAD_KYC_DOCUMENT",
+            log_message: `Uploaded KYC document: ${document_type}`,
+            status: "SUCCESS",
+            action_by: userEmail,
+          });
+        } else {
+          skippedDocs.push(document_type);
+        }
       }
-
-      // Upload to S3
-      const docFolder = `kyc/${document_type.toLowerCase()}`;
-      const docKey = `${docFolder}/${user_id}_${Date.now()}${path.extname(documentFile.originalname)}`;
-      documentUrl = await uploadToS3Buffer(documentFile.buffer, docKey, documentFile.mimetype);
-
-      // Insert into DB
-      await pool.query(
-        "INSERT INTO customer_kyc (user_id, document_type, document_link) VALUES (?, ?, ?)",
-        [user_id, document_type, documentUrl]
-      );
-
-      await logAction({
-        user_id,
-        action: "UPLOAD_KYC_DOCUMENT",
-        log_message: `Uploaded KYC document: ${document_type}`,
-        status: "SUCCESS",
-        action_by: userEmail,
-      });
 
       // --- Optional Selfie Upload ---
       if (selfieFile) {
@@ -119,11 +119,8 @@ exports.uploadKycDocuments = [
           [user_id]
         );
 
-        if (existingSelfie.length > 0) {
-          selfieSkipped = true;
-        } else {
+        if (existingSelfie.length === 0) {
           validateFile(selfieFile);
-
           const selfieFolder = `kyc/selfie`;
           const selfieKey = `${selfieFolder}/${user_id}_${Date.now()}${path.extname(selfieFile.originalname)}`;
           selfieUrl = await uploadToS3Buffer(selfieFile.buffer, selfieKey, selfieFile.mimetype);
@@ -140,6 +137,38 @@ exports.uploadKycDocuments = [
             status: "SUCCESS",
             action_by: userEmail,
           });
+        } else {
+          skippedDocs.push("SELFIE");
+        }
+      }
+
+      // --- Optional Utility Bill Upload ---
+      if (utilityBillFile) {
+        const [existingUtility] = await pool.query(
+          "SELECT user_id FROM customer_kyc WHERE user_id = ? AND document_type = 'UTILITY_BILL' LIMIT 1",
+          [user_id]
+        );
+
+        if (existingUtility.length === 0) {
+          validateFile(utilityBillFile);
+          const utilityFolder = `kyc/utility_bill`;
+          const utilityKey = `${utilityFolder}/${user_id}_${Date.now()}${path.extname(utilityBillFile.originalname)}`;
+          utilityBillUrl = await uploadToS3Buffer(utilityBillFile.buffer, utilityKey, utilityBillFile.mimetype);
+
+          await pool.query(
+            "INSERT INTO customer_kyc (user_id, document_type, document_link) VALUES (?, 'UTILITY_BILL', ?)",
+            [user_id, utilityBillUrl]
+          );
+
+          await logAction({
+            user_id,
+            action: "UPLOAD_UTILITY_BILL",
+            log_message: "Uploaded KYC utility bill",
+            status: "SUCCESS",
+            action_by: userEmail,
+          });
+        } else {
+          skippedDocs.push("UTILITY_BILL");
         }
       }
 
@@ -159,15 +188,22 @@ exports.uploadKycDocuments = [
         });
       }
 
+      const msgParts = [];
+      if (documentUrl) msgParts.push(`${document_type} uploaded`);
+      if (selfieUrl) msgParts.push("selfie uploaded");
+      if (utilityBillUrl) msgParts.push("utility bill uploaded");
+      if (skippedDocs.length > 0) msgParts.push(`skipped existing: ${skippedDocs.join(", ")}`);
+
+      const message = msgParts.length > 0 ? msgParts.join("; ") : "No new files uploaded";
+
       // --- Response ---
       return res.status(201).json({
         status: true,
-        message: `${document_type} uploaded successfully${
-          selfieSkipped ? " (selfie already uploaded, skipped)" : selfieUrl ? " (selfie uploaded too)" : ""
-        }`,
+        message,
         data: {
-          document_url: documentUrl,
+          ...(documentUrl && { document_url: documentUrl }),
           ...(selfieUrl && { selfie_url: selfieUrl }),
+          ...(utilityBillUrl && { utility_bill_url: utilityBillUrl }),
         },
       });
     } catch (err) {
@@ -179,6 +215,8 @@ exports.uploadKycDocuments = [
     }
   },
 ];
+
+
 
 
 

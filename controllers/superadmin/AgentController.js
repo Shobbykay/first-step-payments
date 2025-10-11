@@ -216,7 +216,7 @@ exports.fetchSingleAgent = async (req, res) => {
     //check for documents
     const [rows_] = await pool.query(
       `SELECT *
-       FROM agents_documents 
+       FROM become_an_agent 
        WHERE email_address = ? 
        LIMIT 1`,
       [agent_email]

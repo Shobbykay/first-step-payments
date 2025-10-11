@@ -16,7 +16,106 @@ const uploadToS3 = async (file, folder) => {
   return `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 };
 
+
+
 exports.BecomeAgent = async (req, res) => {
+  try {
+    const { email_address, business_name, business_address, location, business_hours } = req.body;
+
+    // Validate required fields
+    if (!email_address || !business_name || !business_address || !location || !business_hours) {
+      return res.status(400).json({ status: false, message: "Missing required fields" });
+    }
+
+    // Check if user exists
+    const [userRows] = await pool.query(
+      `SELECT user_id 
+       FROM users_account 
+       WHERE email_address = ? 
+       LIMIT 1`,
+      [email_address]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({ status: false, message: "User does not exist" });
+    }
+
+    // Parse business_hours JSON
+    let hours;
+    try {
+      hours = JSON.parse(business_hours);
+    } catch (err) {
+      return res.status(400).json({ status: false, message: "Invalid business_hours JSON expected" });
+    }
+
+    // Check if user already submitted agent application
+    const [existing] = await pool.query(
+      `SELECT email_address FROM become_an_agent WHERE email_address = ? LIMIT 1`,
+      [email_address]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({
+        status: false,
+        message: "Agent application already submitted for this user",
+      });
+    }
+
+    // Upload business license (required)
+    if (!req.files["business_license"]) {
+      return res.status(400).json({
+        status: false,
+        message: "Business license document is required",
+      });
+    }
+
+    const business_license = await uploadToS3(req.files["business_license"][0], "business_license");
+
+    // Insert into become_an_agent table
+    await pool.query(
+      `INSERT INTO become_an_agent 
+        (email_address, business_name, business_address, location, business_hours, business_license)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        email_address,
+        business_name,
+        business_address,
+        location,
+        JSON.stringify(hours),
+        business_license
+      ]
+    );
+
+    // Respond success
+    return res.json({
+      success: true,
+      message: "Agent application submitted successfully",
+      data: {
+        business_name,
+        business_address,
+        location,
+        business_hours: hours.businessHours,
+        documents: {
+          business_license
+        }
+      }
+    });
+
+  } catch (err) {
+    console.error("Error submitting agent application:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+};
+
+
+
+
+
+
+
+
+
+exports.BecomeAgentOld = async (req, res) => {
   try {
     const { email_address, business_name, business_address, location, business_hours } = req.body;
 

@@ -72,7 +72,7 @@ exports.fetchAgentsKYC = async (req, res) => {
         b.verified_by,
         b.verified_date
       FROM users_account a
-      INNER JOIN agents_documents b 
+      INNER JOIN become_an_agent b 
         ON a.email_address = b.email_address
       WHERE a.account_type = 'AGENT'`
     );

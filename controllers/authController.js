@@ -530,7 +530,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT user_id, first_name, last_name, phone_number, dob, email_address, password, account_type, security_question, business_name, business_address, status, date_created, agent_id, profile_img FROM users_account WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, first_name, last_name, phone_number, dob, address, u.email_address, password, account_type, security_question, b.business_name, b.business_address, b.location business_location, b.business_hours, b.business_license, status, u.date_created, agent_id, profile_img, is_2fa, 2fa_method twofa_method, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, b.is_verified is_business_verified FROM users_account u INNER JOIN become_an_agent b ON b.email_address=u.email_address WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
@@ -553,6 +553,69 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ status: false, message: "Invalid credentials" });
     }
+
+    
+    // Check if 2FA is enabled
+    if (user.is_2fa == 1) {
+      const { otp } = req.body; // optional OTP from request
+      const email_address = user.email_address;
+      const first_name = user.first_name;
+
+      // Check if OTP already exists
+      const [existingOtpRows] = await pool.query(
+        "SELECT otp FROM 2fa_verify_code WHERE email_address = ? LIMIT 1",
+        [email_address]
+      );
+
+      if (existingOtpRows.length > 0) {
+        const existingOtp = existingOtpRows[0].otp;
+
+        if (otp) {
+          // OTP provided — verify
+          if (otp.toString() === existingOtp.toString()) {
+            // OTP correct → remove record and continue login
+            await pool.query("DELETE FROM 2fa_verify_code WHERE email_address = ?", [email_address]);
+            console.log(`2FA verified for ${email_address}`);
+
+          } else {
+            // OTP incorrect
+            return res.status(400).json({
+              status: false,
+              message: "Invalid OTP. Please check the code sent to your email.",
+            });
+          }
+        } else {
+          // OTP exists but not provided yet
+          return res.status(200).json({
+            status: false,
+            message: "A 2FA verification code has already been sent. Please enter the OTP to continue.",
+          });
+        }
+      } else {
+        // No existing OTP — generate and send new one
+        const newOtp = Math.floor(100000 + Math.random() * 900000);
+
+        await pool.query(
+          "INSERT INTO 2fa_verify_code (email_address, otp) VALUES (?, ?)",
+          [email_address, newOtp]
+        );
+
+        if (user.twofa_method === "email") {
+          console.log("sending 2fa mail");
+          await sendMail(
+            email_address,
+            "Your FirstStep Payments 2FA Code",
+            `Dear <strong>${first_name}</strong>,<br><br>Your One-Time Verification Code (OTP) is: <strong>${newOtp}</strong>.<br><br>This code will expire in 10 minutes. Do not share it with anyone.<br><br>If you did not attempt to log in, please contact support immediately.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
+          );
+        }
+
+        return res.status(200).json({
+          status: true,
+          message: "A 2FA verification code has been sent to your email address",
+        });
+      }
+    }
+
 
     // Sign JWT token
     const token = jwt.sign(
@@ -598,54 +661,43 @@ exports.login = async (req, res) => {
       account_type: user.account_type,
       security_question: user.security_question,
       is_transaction_pin_set,
+      is_2fa_set: (user.is_2fa == 1) ? true : false,
+      ...(user.is_2fa == 1 && { "2fa_method": user.twofa_method }),
       profile_img: user.profile_img,
+      wallet_balance: "0.00",
       account_status: status_[user.status],
       account_created: user.date_created,
     };
 
-    // Add business info if not USER
-    if (user.account_type !== "USER") {
-      responseData.agent_id = user.agent_id;
+    // business details
+    if (user.account_type == "AGENT"){
       responseData.business_name = user.business_name;
       responseData.business_address = user.business_address;
+      responseData.location = user.location;
 
-      // check if business info is set
-      const [rows_doc] = await pool.query(
-        "SELECT * FROM agents_documents WHERE email_address = ?",
-        [user.email_address]
-      );
-
-      let is_doc_verified = (rows_doc.length > 0) ? true : false;
-
-      if (is_doc_verified){
-        responseData.business_name = rows_doc[0].business_name;
-        responseData.business_address = rows_doc[0].business_address;
-        responseData.location = rows_doc[0].location;
-        
-        try {
-          responseData.business_hours = JSON.parse(rows_doc[0].business_hours);
-        } catch (e) {
-          responseData.business_hours = rows_doc[0].business_hours; // fallback if parsing fails
-        }
-
-        responseData.is_verified = rows_doc[0].is_verified;
-
-        if (rows_doc[0].is_verified == 'VERIFIED'){
-          is_doc_verified = true;
-        } else{
-          is_doc_verified = false;
-        }
-
-        //add the documents
-        responseData.documents = {
-          government_id: rows_doc[0].government_id,
-          utility_bill: rows_doc[0].utility_bill,
-          passport_photo: rows_doc[0].passport_photo
-        };
+      try {
+        responseData.business_hours = JSON.parse(user.business_hours);
+      } catch (e) {
+        responseData.business_hours = user.business_hours; // fallback if parsing fails
       }
 
-      responseData.is_doc_verified = is_doc_verified;
+      responseData.is_business_verified = user.is_business_verified;
     }
+
+    // Validate KYC
+    const [rows_kyc] = await pool.query(
+      "SELECT status FROM customer_kyc WHERE user_id = ?",
+      [user.email_address]
+    );
+
+    let kyc_status = "PENDING";
+
+    if (rows_kyc.length > 0) {
+      const allApproved = rows_kyc.every(row => row.status === "APPROVED");
+      kyc_status = allApproved ? "APPROVED" : "IN_REVIEW";
+    }
+
+    responseData.kyc_status = kyc_status;
 
     return res.status(200).json({
       status: true,
