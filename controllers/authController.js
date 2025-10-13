@@ -784,7 +784,7 @@ exports.resetPasswordRequest = async (req, res) => {
 
 //for reset password
 exports.changePassword = async (req, res) => {
-  const { phone_number, password } = req.body;
+  const { phone_number, password, otp } = req.body;
 
   // Extract token from "Authorization: Bearer <token>"
   const authHeader = req.headers["authorization"];
@@ -809,6 +809,21 @@ exports.changePassword = async (req, res) => {
     if (decoded.phone_number !== phone_number) {
       return res.status(403).json({ status: false, message: "Phone number does not match token" });
     }
+
+
+    const [resetRecords] = await pool.query(
+      "SELECT user_id, otp FROM reset_password WHERE user_id = ? LIMIT 1",
+      [user_id]
+    );
+
+    if (resetRecords.length > 0) {
+      const otp_log = resetRecords[0].otp;
+
+      if (otp !== otp_log){
+        return res.status(401).json({ status: false, message: "Invalid or expired OTP" });
+      }
+    }
+
 
     // Validate password strength
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{7,}$/;
