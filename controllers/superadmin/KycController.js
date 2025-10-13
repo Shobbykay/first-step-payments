@@ -556,9 +556,8 @@ exports.listApprovedKYC = async (req, res) => {
           u.phone_number,
           u.email_address,
           u.profile_img,
-          c.document_type,
-          c.approved_by,
-          c.approved_date
+          MAX(c.approved_by) AS approved_by,
+          MAX(c.approved_date) AS approved_date
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
        WHERE c.status = 'APPROVED'
