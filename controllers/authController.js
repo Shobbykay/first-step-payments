@@ -531,7 +531,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT user_id, first_name, last_name, phone_number, dob, address, u.email_address, password, account_type, security_question, b.business_name, b.business_address, b.location business_location, b.business_hours, b.business_license, status, u.date_created, agent_id, profile_img, is_2fa, 2fa_method twofa_method, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, b.is_verified is_business_verified FROM users_account u INNER JOIN become_an_agent b ON b.email_address=u.email_address WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, first_name, last_name, phone_number, dob, address, u.email_address, password, account_type, security_question, b.business_name, b.business_address, b.location business_location, b.business_hours, b.business_license, status, u.date_created, agent_id, profile_img, is_2fa, 2fa_method twofa_method, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, b.is_verified is_business_verified FROM users_account u LEFT JOIN become_an_agent b ON b.email_address = u.email_address WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
