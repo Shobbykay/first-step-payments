@@ -294,7 +294,86 @@ exports.rejectCustomerKYC = async (req, res) => {
 
 
 
-exports.approveAgentKYC = async (req, res) => {
+exports.approveCustomerAgentKYC = async (req, res) => {
+  const { email_address } = req.user?.email || {}; // middleware
+  const { agent_email } = req.body; // we’ll use agent’s email to locate document
+
+  if (!agent_email) {
+    return res.status(400).json({ status: false, message: "Agent email is required" });
+  }
+
+  try {
+    // Check if agent document exists
+    const [docs] = await pool.query(
+      "SELECT * FROM agents_documents WHERE email_address = ? LIMIT 1",
+      [agent_email]
+    );
+
+    if (docs.length === 0) {
+      return res.status(404).json({ status: false, message: "Agent KYC document not found" });
+    }
+
+    const doc = docs[0];
+
+    //  Already verified check
+    if (doc.is_verified === "APPROVED") {
+      return res.status(400).json({
+        status: false,
+        message: `This agent’s KYC is already approved.`,
+      });
+    }
+
+    //  Update KYC to approved
+    await pool.query(
+      `UPDATE agents_documents 
+       SET is_verified = 'APPROVED', verified_by = ?, verified_date = NOW() 
+       WHERE email_address = ?`,
+      [email_address, agent_email]
+    );
+
+    // Fetch agent user details
+    const [userRows] = await pool.query(
+      "SELECT first_name, email_address FROM users_account WHERE email_address = ? LIMIT 1",
+      [agent_email]
+    );
+
+    if (userRows.length > 0) {
+      const { first_name, email_address: userEmail } = userRows[0];
+
+      // Send mail
+      await sendMail(
+        userEmail,
+        "Agent KYC Approved",
+        `Hi <strong>${first_name}</strong>,<br><br>
+        Your Agent KYC has been approved 🎉.<br>
+        You can now operate fully with <strong>FirstStep</strong>.<br><br>
+        Best regards,<br><strong>FirstStep Team</strong>`
+      );
+    }
+
+    // Log success
+    await logAction(
+      agent_email,
+      "AGENT_KYC_APPROVAL",
+      `Agent KYC approved by ${email_address}`
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: `Agent KYC approved successfully.`,
+    });
+  } catch (err) {
+    console.error("Error approving Agent KYC:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
+};
+
+
+
+
+
+
+exports.approveAgentKYC_old = async (req, res) => {
   const { email_address } = req.user?.email || {}; // middleware
   const { agent_email } = req.body; // we’ll use agent’s email to locate document
 

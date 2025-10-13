@@ -91,7 +91,7 @@ router.get('/kyc/customer', auth, fetchCustomersKYC);
 router.get('/kyc/agents', auth, fetchAgentsKYC);
 router.post('/kyc/customer/approve', auth, approveCustomerKYC);
 router.post('/kyc/customer/reject', auth, rejectCustomerKYC);
-router.post('/kyc/agent/approve', auth, approveAgentKYC);listRejectedKYC
+router.post('/kyc/agent/approve', auth, approveAgentKYC);
 router.post('/kyc/agent/reject', auth, rejectAgentKYC);
 router.get('/kyc/rejected_kyc', auth, listRejectedKYC);
 router.get('/kyc/approved_kyc', auth, listApprovedKYC);

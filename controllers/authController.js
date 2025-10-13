@@ -827,9 +827,9 @@ exports.changePassword = async (req, res) => {
 
 
     const [resetRecords] = await pool.query(
-      "SELECT user_id, otp FROM reset_password WHERE user_id = ? LIMIT 1",
-      [user_id]
-    );
+      "SELECT r.user_id, r.otp FROM reset_password r INNER JOIN users_account u ON u.user_id = r.user_id WHERE u.phone_number = ? LIMIT 1",
+      [phone_number]
+    );// SELECT user_id, otp FROM reset_password WHERE user_id = ? LIMIT 1
 
     if (resetRecords.length > 0) {
       const otp_log = resetRecords[0].otp;
