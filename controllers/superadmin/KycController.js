@@ -372,8 +372,8 @@ exports.approveCustomerAgentKYC = async (req, res) => {
 
 
 
-
-exports.approveAgentKYC_old = async (req, res) => {
+// OLD
+exports.approveAgentKYC = async (req, res) => {
   const { email_address } = req.user?.email || {}; // middleware
   const { agent_email } = req.body; // we’ll use agent’s email to locate document
 
