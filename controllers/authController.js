@@ -728,7 +728,7 @@ exports.resetPasswordRequest = async (req, res) => {
   try {
     // Check if user exists
     const [users] = await pool.query(
-      "SELECT user_id, phone_number FROM users_account WHERE phone_number = ? LIMIT 1",
+      "SELECT user_id, phone_number, email_address, first_name FROM users_account WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
@@ -736,7 +736,7 @@ exports.resetPasswordRequest = async (req, res) => {
       return res.status(404).json({ status: false, message: "User not found" });
     }
 
-    const { user_id, phone_number: dbPhone } = users[0];
+    const { user_id, first_name, email_address, phone_number: dbPhone } = users[0];
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -765,6 +765,21 @@ exports.resetPasswordRequest = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: "15m" } // short expiry for security
     );
+
+
+    // Send notification email
+    await sendMail(
+      email_address,
+      "FirstStep Payments Password Reset OTP",
+      `Hello <strong>${first_name}</strong>,<br><br>
+      You requested to reset your password.<br>
+      Please use the One-Time Password (OTP) below to complete your password reset process:<br><br>
+      <h2 style="color:#2b7cff; letter-spacing:2px;">${otp}</h2><br>
+      This OTP will expire in 10 minutes.<br><br>
+      If you did not request this action, please contact our support team immediately.<br><br>
+      Best regards,<br><strong>First Step Payments Team</strong>`
+    );
+      
 
     // 5. Return success
     return res.status(200).json({
