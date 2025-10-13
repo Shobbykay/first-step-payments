@@ -588,7 +588,7 @@ exports.login = async (req, res) => {
         } else {
           // OTP exists but not provided yet
           return res.status(200).json({
-            status: false,
+            status: true,
             message: "A 2FA verification code has already been sent. Please enter the OTP to continue.",
           });
         }
