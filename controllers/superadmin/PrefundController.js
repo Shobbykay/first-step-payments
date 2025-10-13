@@ -1,5 +1,6 @@
 const pool = require('../../services/db');
 const logAction = require("../../utils/logger");
+const { sendMail } = require("../../utils/mailHelper");
 
 // Prefunding Controller
 exports.createPrefunding = async (req, res) => {
@@ -73,9 +74,9 @@ exports.listPrefunding = async (req, res) => {
 
     // Fetch prefunding records
     const [rows] = await pool.query(
-      `SELECT p.id, p.user_id, u.first_name, u.last_name, u.email_address, 
+      `SELECT p.id, u.agent_id, u.business_name, u.phone_number contact, p.user_id, u.first_name, u.last_name, u.email_address, 
               p.amount, p.initiated_by, a.fullname AS admin_full_name,
-              p.approved_by, p.approved_date, p.date_created
+              p.approved_by, p.approved_date, p.status, p.date_created
        FROM prefunding p
        JOIN users_account u ON p.user_id = u.user_id
        JOIN admin_users a ON p.initiated_by = a.email_address
@@ -100,5 +101,229 @@ exports.listPrefunding = async (req, res) => {
   } catch (err) {
     console.error("List Prefunding Error:", err);
     return res.status(500).json({ status: false, message: "Server error" });
+  }
+};
+
+
+
+
+
+
+exports.approvePrefund = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+    const { approval_note } = req.body || {};
+    const approved_by = req.user?.email || "SYSTEM";
+
+    if (!id) {
+      return res.status(400).json({
+        status: false,
+        message: "Prefund id is required",
+      });
+    }
+
+    await connection.beginTransaction();
+
+    // Fetch prefund record
+    const [prefundRows] = await connection.query(
+      `SELECT user_id, amount, status FROM prefunding WHERE id = ? LIMIT 1`,
+      [id]
+    );
+
+    if (prefundRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        status: false,
+        message: "Prefund record not found",
+      });
+    }
+
+    const { user_id, amount } = prefundRows[0];
+
+    // Get user info
+    const [userRows] = await connection.query(
+      `SELECT first_name, email_address FROM users_account WHERE user_id = ? LIMIT 1`,
+      [user_id]
+    );
+
+    if (userRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        status: false,
+        message: "User not found for this prefund request",
+      });
+    }
+
+    const { first_name, email_address } = userRows[0];
+
+    // Fetch or create wallet balance
+    const [walletRows] = await connection.query(
+      `SELECT balance FROM wallet_balance WHERE email_address = ? LIMIT 1`,
+      [email_address]
+    );
+
+    let currentBalance = 0;
+
+    if (walletRows.length === 0) {
+      await connection.query(
+        `INSERT INTO wallet_balance (email_address, balance, date_created, date_modified)
+         VALUES (?, 0, NOW(), NOW())`,
+        [email_address]
+      );
+      currentBalance = 0;
+    } else {
+      currentBalance = parseFloat(walletRows[0].balance || 0);
+    }
+
+    const newBalance = currentBalance + parseFloat(amount);
+
+    // Update prefund as approved (always allow approval)
+    await connection.query(
+      `UPDATE prefunding 
+       SET status='APPROVED', 
+           approved_by=?, 
+           approved_date=NOW(),
+           approval_note=?
+       WHERE id=?`,
+      [approved_by, approval_note || null, id]
+    );
+
+    // Step 5: Update wallet balance
+    await connection.query(
+      `UPDATE wallet_balance 
+       SET balance=?, date_modified=NOW() 
+       WHERE email_address=?`,
+      [newBalance, email_address]
+    );
+
+    // Insert into transactions table
+    const transaction_id = "FSF-" + Date.now() + Math.floor(Math.random() * 1000);
+    const charges = 0;
+    const amount_received = parseFloat(amount) - charges;
+
+    await connection.query(
+      `INSERT INTO transactions 
+        (transaction_id, user_id, recipient_user_id, trans_type, amount, charges, amount_received, note, transfer_status, status, date_created)
+       VALUES (?, 'SYSTEM', ?, 'PREFUND', ?, ?, ?, ?, 'COMPLETED', 'SUCCESSFUL', NOW())`,
+      [
+        transaction_id,
+        user_id,
+        parseFloat(amount),
+        charges,
+        amount_received,
+        approval_note || null,
+      ]
+    );
+
+    // Log actions
+    await logAction({
+      user_id,
+      action: "APPROVE_PREFUND",
+      log_message: `Prefund of ₦${amount} approved and added to wallet. Previous balance: ₦${currentBalance}, New balance: ₦${newBalance}`,
+      status: "SUCCESS",
+      action_by: approved_by,
+    });
+
+    await logAction({
+      user_id,
+      action: "WALLET_CREDIT",
+      log_message: `Wallet credited with ₦${amount} after prefund approval by ${approved_by}. New balance: ₦${newBalance}`,
+      status: "SUCCESS",
+      action_by: approved_by,
+    });
+
+    // Commit changes
+    await connection.commit();
+
+    // Send mail
+    await sendMail(
+      email_address,
+      "Prefund Request Approved ✅",
+      `Hi <strong>${first_name}</strong>,<br><br>
+      Your prefund request of <strong>₦${Number(amount).toLocaleString()}</strong> 
+      has been approved successfully.<br><br>
+      Your wallet has been credited and your new balance is 
+      <strong>₦${Number(newBalance).toLocaleString()}</strong>.<br><br>
+      Best regards,<br>
+      <strong>FirstStep Financials Team</strong>`
+    );
+
+    // Response
+    return res.status(200).json({
+      status: true,
+      message: `Prefund approved successfully and wallet credited with ₦${Number(amount).toLocaleString()}`,
+      transaction_id,
+      new_balance: newBalance,
+    });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    console.error("Error approving prefund:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error approving prefund",
+    });
+  } finally {
+    if (connection) connection.release();
+  }
+};
+
+
+
+
+
+exports.listPrefundingHistory = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+    let { page = 1, limit = 20 } = req.query;
+
+    page = parseInt(page);
+    limit = parseInt(limit);
+    const offset = (page - 1) * limit;
+
+    if (!user_id) {
+      return res.status(400).json({
+        status: false,
+        message: "user_id is required",
+      });
+    }
+
+    // Count total prefund records for pagination
+    const [countRows] = await pool.query(
+      `SELECT COUNT(*) AS total FROM prefunding WHERE user_id = ?`,
+      [user_id]
+    );
+    const total = countRows[0].total;
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch paginated prefund history
+    const [rows] = await pool.query(
+      `SELECT id, user_id, amount, status, approval_note, approved_by, approved_date, date_created
+       FROM prefunding 
+       WHERE user_id = ?
+       ORDER BY date_created DESC
+       LIMIT ? OFFSET ?`,
+      [user_id, limit, offset]
+    );
+
+    return res.status(200).json({
+      status: true,
+      message: "Prefunding history fetched successfully",
+      pagination: {
+        total,
+        page,
+        limit,
+        total_pages: totalPages,
+        has_next: page < totalPages,
+        has_prev: page > 1,
+      },
+      data: rows,
+    });
+  } catch (err) {
+    console.error("Error fetching prefunding history:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error fetching prefunding history",
+    });
   }
 };

@@ -13,11 +13,21 @@ exports.fetchTickets = async (req, res) => {
 
     // Fetch paginated tickets
     const [tickets] = await pool.query(
-      "SELECT * FROM tickets ORDER BY date_created DESC LIMIT ? OFFSET ?",
+      "SELECT t.*, CONCAT(u.first_name, ' ', u.last_name) user_name, u.kyc_status, u.account_type, u.user_id, u.phone_number FROM tickets t INNER JOIN users_account u ON t.email_address = u.email_address ORDER BY t.date_created DESC LIMIT ? OFFSET ?",
       [limit, offset]
     );
 
     const totalPages = Math.ceil(total / limit);
+
+    // After fetching tickets from DB
+    const formattedTickets = tickets.map(ticket => {
+        const parts = ticket.ticket_id.split("-");
+        const lastPart = parts[parts.length - 1]; // get last section of UUID
+        return {
+            ...ticket,
+            short_ticket_id: `TIK-${lastPart}`
+        };
+    });
 
     return res.status(200).json({
       status: true,
@@ -30,7 +40,7 @@ exports.fetchTickets = async (req, res) => {
         has_next: page < totalPages,
         has_prev: page > 1,
       },
-      data: tickets,
+      data: formattedTickets,
     });
   } catch (err) {
     console.error("Error fetching tickets:", err);
