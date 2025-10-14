@@ -570,7 +570,7 @@ exports.listRejectedKYC = async (req, res) => {
           c.user_id,
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.profile_img,
-          MAX(c.rejected_reason) AS rejerejected_reasoncted_by
+          MAX(c.rejected_reason) AS rejected_reason,
           MAX(c.rejected_by) AS rejected_by,
           MAX(c.rejected_date) AS rejected_date
        FROM customer_kyc c

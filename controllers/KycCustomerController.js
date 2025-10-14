@@ -11,7 +11,7 @@ const uploadToS3Buffer = require("../utils/s3Upload");
 
 
 // allowed document types
-const ALLOWED_DOC_TYPES = ["DRIVERS_LICENSE", "INTL_PASSPORT", "NATIONAL_ID"];
+const ALLOWED_DOC_TYPES = ["DRIVERS_LICENSE", "INTL_PASSPORT", "NATIONAL_ID", "BUSINESS_LICENSE"];
 const ALLOWED_FILE_TYPES = [".jpg", ".jpeg", ".png", ".pdf"];
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
