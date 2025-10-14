@@ -195,7 +195,7 @@ exports.disable_twofa = async (req, res) => {
       await pool.query(
         `INSERT INTO 2fa_verify_code (email_address, otp) 
         VALUES (?, ?)
-        ON DUPLICATE KEY UPDATE otp = VALUES(otp), created_at = NOW()`,
+        ON DUPLICATE KEY UPDATE otp = VALUES(otp), date_created = NOW()`,
         [email_address, newOtp]
       );
 
