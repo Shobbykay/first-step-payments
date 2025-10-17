@@ -5,7 +5,7 @@ const { fetchLogs, fetchSingleLog } = require('../controllers/superadmin/logCont
 const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, reinstateCustomer, updateCustomer, changeUserPassword } = require('../controllers/superadmin/customerController');
 const { fetchAllAgents, updateAgent, reinstateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
 const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers, updateProfileImage, updateName, changePassword } = require('../controllers/superadmin/adminController');
-const { createPrefunding, listPrefunding, approvePrefund, listPrefundingHistory } = require('../controllers/superadmin/PrefundController');
+const { createPrefunding, listPrefunding, approvePrefund, listPrefundingHistory, listPendingPrefunding, listApprovedPrefunding } = require('../controllers/superadmin/PrefundController');
 const { transferRate, fxRate, transfersService, getAgentCommissionFees, updateAgentCommissionFee } = require('../controllers/superadmin/FeesController');
 const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC, rejectCustomerKYC, listRejectedKYC, listApprovedKYC, listPendingCustomerKYC, listPendingKYC, listPendingAgentKYC, listCustomerToAgent, viewCustomerKYC, verifyKYC, rejectKYC } = require('../controllers/superadmin/KycController');
 const { fetchTickets, fetchSingleTicket, changeTicketStatus } = require('../controllers/superadmin/TicketController');
@@ -72,6 +72,8 @@ router.post('/agent/prefund', auth, createPrefunding);
 router.get('/agent/prefund/list', auth, listPrefunding);
 router.post('/agent/prefund/approve/:id', auth, approvePrefund);
 router.get('/agent/prefund/history/:user_id', auth, listPrefundingHistory);
+router.get('/agent/prefund/pending', auth, listPendingPrefunding);
+router.get('/agent/prefund/approved', auth, listApprovedPrefunding);
 
 
 

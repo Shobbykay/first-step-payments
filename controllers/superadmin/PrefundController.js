@@ -327,3 +327,133 @@ exports.listPrefundingHistory = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+exports.listPendingPrefunding = async (req, res) => {
+  try {
+    // Pagination setup
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10; // default to 10
+    let offset = (page - 1) * limit;
+
+    // Get total count of pending prefunding
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM prefunding WHERE status = 'PENDING'"
+    );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch pending prefunding records
+    const [rows] = await pool.query(
+      `SELECT 
+          p.id AS fund_id,
+          p.user_id,
+          u.agent_id,
+          CONCAT(u.first_name, ' ', u.last_name) AS agent_name,
+          u.profile_img,
+          p.amount AS amount_funded,
+          p.date_created AS date_inputed,
+          p.initiated_by,
+          p.status,
+          a.fullname AS funded_by
+       FROM prefunding p
+       LEFT JOIN users_account u ON u.user_id = p.user_id
+       LEFT JOIN admin_users a ON a.email_address = p.initiated_by
+       WHERE p.status = 'PENDING'
+       ORDER BY p.date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    // Response
+    return res.json({
+      status: true,
+      message: "Pending prefunding records fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit
+        },
+        records: rows
+      }
+    });
+  } catch (err) {
+    console.error("List Pending Prefunding Error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error"
+    });
+  }
+};
+
+
+
+
+
+exports.listApprovedPrefunding = async (req, res) => {
+  try {
+    // Pagination setup
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10; // default 10
+    let offset = (page - 1) * limit;
+
+    // Get total count of approved prefunding
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM prefunding WHERE status = 'APPROVED'"
+    );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch approved prefunding records
+    const [rows] = await pool.query(
+      `SELECT 
+          p.id AS fund_id,
+          p.user_id,
+          u.agent_id,
+          CONCAT(u.first_name, ' ', u.last_name) AS agent_name,
+          u.profile_img,
+          p.amount AS amount_funded,
+          p.date_created AS date_inputed,
+          p.initiated_by,
+          a.fullname AS funded_by,
+          p.approval_note,
+          au.fullname AS approved_name,
+          p.approved_by,
+          p.approved_date
+       FROM prefunding p
+       LEFT JOIN users_account u ON u.user_id = p.user_id
+       LEFT JOIN admin_users a ON a.email_address = p.initiated_by
+       LEFT JOIN admin_users au ON au.email_address = p.approved_by
+       WHERE p.status = 'APPROVED'
+       ORDER BY p.date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    // Response
+    return res.json({
+      status: true,
+      message: "Approved prefunding records fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit
+        },
+        records: rows
+      }
+    });
+  } catch (err) {
+    console.error("List Approved Prefunding Error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error"
+    });
+  }
+};
