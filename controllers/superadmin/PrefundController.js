@@ -647,3 +647,78 @@ exports.rejectPrefund = async (req, res) => {
     if (connection) connection.release();
   }
 };
+
+
+
+
+exports.deletePrefund = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+    const deleted_by = req.user?.email || "SYSTEM";
+
+    if (!id) {
+      return res.status(400).json({
+        status: false,
+        message: "Prefund ID is required",
+      });
+    }
+
+    await connection.beginTransaction();
+
+    // Fetch prefund record
+    const [prefundRows] = await connection.query(
+      `SELECT user_id, amount, status FROM prefunding WHERE id = ? LIMIT 1`,
+      [id]
+    );
+
+    if (prefundRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        status: false,
+        message: "Prefund record not found",
+      });
+    }
+
+    const { user_id, amount, status } = prefundRows[0];
+
+    // Only PENDING records can be deleted
+    if (status !== "PENDING") {
+      await connection.rollback();
+      return res.status(400).json({
+        status: false,
+        message: "Only prefund requests with status 'PENDING' can be deleted",
+      });
+    }
+
+    // Delete prefund record
+    await connection.query(`DELETE FROM prefunding WHERE id = ?`, [id]);
+
+    // Log deletion
+    await logAction({
+      user_id,
+      action: "DELETE_PREFUND",
+      log_message: `Prefund record of ₦${amount} (status: ${status}) deleted by ${deleted_by}`,
+      status: "SUCCESS",
+      action_by: deleted_by,
+    });
+
+    // Commit
+    await connection.commit();
+
+    // Response
+    return res.status(200).json({
+      status: true,
+      message: "Pending prefund record deleted successfully.",
+    });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    console.error("Error deleting prefund:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error deleting prefund",
+    });
+  } finally {
+    if (connection) connection.release();
+  }
+};
