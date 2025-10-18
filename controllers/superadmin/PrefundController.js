@@ -424,7 +424,8 @@ exports.listApprovedPrefunding = async (req, res) => {
           p.approval_note,
           au.fullname AS approved_name,
           p.approved_by,
-          p.approved_date
+          p.approved_date,
+          p.status
        FROM prefunding p
        LEFT JOIN users_account u ON u.user_id = p.user_id
        LEFT JOIN admin_users a ON a.email_address = p.initiated_by
@@ -455,5 +456,194 @@ exports.listApprovedPrefunding = async (req, res) => {
       status: false,
       message: "Server error"
     });
+  }
+};
+
+
+
+
+
+exports.listRejectedPrefunding = async (req, res) => {
+  try {
+    // Pagination setup
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10; // default 10
+    let offset = (page - 1) * limit;
+
+    // Get total count of rejected prefunding
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM prefunding WHERE status = 'REJECTED'"
+    );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
+
+    // Fetch rejected prefunding records
+    const [rows] = await pool.query(
+      `SELECT 
+          p.id AS fund_id,
+          p.user_id,
+          u.agent_id,
+          CONCAT(u.first_name, ' ', u.last_name) AS agent_name,
+          u.profile_img,
+          p.amount AS amount_funded,
+          p.date_created AS date_inputed,
+          p.initiated_by,
+          a.fullname AS funded_by,
+          p.rejected_reason,
+          au.fullname AS rejected_name,
+          p.rejected_by,
+          p.rejected_date,
+          p.status
+       FROM prefunding p
+       LEFT JOIN users_account u ON u.user_id = p.user_id
+       LEFT JOIN admin_users a ON a.email_address = p.initiated_by
+       LEFT JOIN admin_users au ON au.email_address = p.rejected_by
+       WHERE p.status = 'REJECTED'
+       ORDER BY p.date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+
+    // Response
+    return res.json({
+      status: true,
+      message: "Rejected prefunding records fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit
+        },
+        records: rows
+      }
+    });
+  } catch (err) {
+    console.error("List Rejected Prefunding Error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error"
+    });
+  }
+};
+
+
+
+
+
+exports.rejectPrefund = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+    const { rejected_reason } = req.body || {};
+    const rejected_by = req.user?.email || "SYSTEM";
+
+    if (!id) {
+      return res.status(400).json({
+        status: false,
+        message: "Prefund id is required",
+      });
+    }
+
+    if (!rejected_reason) {
+      return res.status(400).json({
+        status: false,
+        message: "Rejection reason is required",
+      });
+    }
+
+    await connection.beginTransaction();
+
+    // Fetch prefund record
+    const [prefundRows] = await connection.query(
+      `SELECT user_id, amount, status FROM prefunding WHERE id = ? LIMIT 1`,
+      [id]
+    );
+
+    if (prefundRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        status: false,
+        message: "Prefund record not found",
+      });
+    }
+
+    const { user_id, amount, status } = prefundRows[0];
+
+    // Check if already rejected
+    if (status === "REJECTED") {
+      await connection.rollback();
+      return res.status(400).json({
+        status: false,
+        message: "This prefund request has already been rejected",
+      });
+    }
+
+    // Get user info
+    const [userRows] = await connection.query(
+      `SELECT first_name, email_address FROM users_account WHERE user_id = ? LIMIT 1`,
+      [user_id]
+    );
+
+    if (userRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        status: false,
+        message: "User not found for this prefund request",
+      });
+    }
+
+    const { first_name, email_address } = userRows[0];
+
+    // Update prefund as rejected
+    await connection.query(
+      `UPDATE prefunding 
+       SET status='REJECTED',
+           rejected_reason=?,
+           rejected_by=?,
+           rejected_date=NOW()
+       WHERE id=?`,
+      [rejected_reason, rejected_by, id]
+    );
+
+    // Log actions
+    await logAction({
+      user_id,
+      action: "REJECT_PREFUND",
+      log_message: `Prefund of ₦${amount} rejected. Reason: ${rejected_reason}`,
+      status: "SUCCESS",
+      action_by: rejected_by,
+    });
+
+    // Commit changes
+    await connection.commit();
+
+    // Send rejection mail
+    await sendMail(
+      email_address,
+      "Prefund Request Rejected",
+      `Hi <strong>${first_name}</strong>,<br><br>
+      We regret to inform you that your prefund request of 
+      <strong>₦${Number(amount).toLocaleString()}</strong> has been <strong>rejected</strong>.<br><br>
+      <strong>Reason:</strong> ${rejected_reason}<br><br>
+      You may review your request and try again if necessary.<br><br>
+      Best regards,<br>
+      <strong>FirstStep Financials Team</strong>`
+    );
+
+    // Response
+    return res.status(200).json({
+      status: true,
+      message: `Prefund rejected successfully. Reason: ${rejected_reason}`,
+    });
+  } catch (err) {
+    if (connection) await connection.rollback();
+    console.error("Error rejecting prefund:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error rejecting prefund",
+    });
+  } finally {
+    if (connection) connection.release();
   }
 };
