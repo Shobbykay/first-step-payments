@@ -741,3 +741,208 @@ exports.changeUserPassword = async (req, res) => {
     return res.status(500).json({ status: false, message: "Server error" });
   }
 };
+
+
+
+
+
+exports.ApproveBecomeAnAgent = async (req, res) => {
+  try {
+    const { email_address } = req.body;
+    const verified_by = req.user?.email || req.user?.email_address; // from middleware
+
+    if (!email_address) {
+      return res.status(400).json({
+        status: false,
+        message: "Email address is required",
+      });
+    }
+
+    // Check if user exists in users_account
+    const [userRows] = await pool.query(
+      "SELECT user_id, first_name FROM users_account WHERE email_address = ?",
+      [email_address]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found in users_account",
+      });
+    }
+
+    const { first_name } = userRows[0];
+
+    // Check if user has a record in become_an_agent
+    const [agentRows] = await pool.query(
+      "SELECT * FROM become_an_agent WHERE email_address = ?",
+      [email_address]
+    );
+
+    if (agentRows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No agent request found for this email address",
+      });
+    }
+
+    const agent = agentRows[0];
+
+    // Ensure not already approved
+    if (agent.is_verified === "APPROVED") {
+      return res.status(400).json({
+        status: false,
+        message: "This agent request has already been approved",
+      });
+    }
+
+    // Approve the agent request
+    await pool.query(
+      `UPDATE become_an_agent 
+       SET is_verified = 'APPROVED', 
+           verified_by = ?, 
+           verified_date = NOW(),
+           rejected_reason = NULL,
+           rejected_by = NULL,
+           rejected_date = NULL 
+       WHERE email_address = ?`,
+      [verified_by, email_address]
+    );
+
+    // Update users_account details
+    await pool.query(
+      `UPDATE users_account 
+       SET business_name = ?, 
+           business_address = ?, 
+           business_location = ?, 
+           business_hours = ?,
+           account_type = 'AGENT'
+       WHERE email_address = ?`,
+      [
+        agent.business_name,
+        agent.business_address,
+        agent.location,
+        agent.business_hours,
+        email_address,
+      ]
+    );
+
+    // Send email notification
+    await sendMail(
+      email_address,
+      "Agent Verification Approved ✅",
+      `Hi <strong>${first_name}</strong>,<br><br>
+      Congratulations! Your agent verification has been <strong>approved</strong> successfully.<br><br>
+      You are now officially recognized as an agent on our platform.<br><br>
+      You can now access your agent dashboard and enjoy full agent benefits.<br><br>
+      Best regards,<br>
+      <strong>FirstStep Financials Team</strong>`
+    );
+
+    // ✅ Success response
+    return res.json({
+      status: true,
+      message: "Agent request approved successfully",
+    });
+  } catch (err) {
+    console.error("ApproveBecomeAnAgent Error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error",
+    });
+  }
+};
+
+
+
+
+
+
+exports.RejectBecomeAnAgent = async (req, res) => {
+  try {
+    const { email_address, rejected_reason } = req.body;
+    const rejected_by = req.admin?.email_address || req.user?.email_address; // from middleware
+
+    if (!email_address || !rejected_reason) {
+      return res.status(400).json({
+        status: false,
+        message: "Email address and rejection reason are required",
+      });
+    }
+
+    // Check if user exists in users_account
+    const [userRows] = await pool.query(
+      "SELECT user_id, first_name FROM users_account WHERE email_address = ?",
+      [email_address]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found in users_account",
+      });
+    }
+
+    const { first_name } = userRows[0];
+
+    // Check if user has a record in become_an_agent
+    const [agentRows] = await pool.query(
+      "SELECT * FROM become_an_agent WHERE email_address = ?",
+      [email_address]
+    );
+
+    if (agentRows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No agent request found for this email address",
+      });
+    }
+
+    const agent = agentRows[0];
+
+    // Ensure not already rejected
+    if (agent.is_verified === "REJECTED") {
+      return res.status(400).json({
+        status: false,
+        message: "This agent request has already been rejected",
+      });
+    }
+
+    // Update rejection details
+    await pool.query(
+      `UPDATE become_an_agent 
+       SET is_verified = 'REJECTED',
+           rejected_reason = ?,
+           rejected_by = ?,
+           rejected_date = NOW(),
+           verified_by = NULL,
+           verified_date = NULL
+       WHERE email_address = ?`,
+      [rejected_reason, rejected_by, email_address]
+    );
+
+    // Send rejection email
+    await sendMail(
+      email_address,
+      "Agent Verification Rejected",
+      `Hi <strong>${first_name}</strong>,<br><br>
+      We regret to inform you that your agent verification request has been <strong>rejected</strong>.<br><br>
+      <strong>Reason:</strong> ${rejected_reason}<br><br>
+      You may review your submission and reapply if you believe this was an error.<br><br>
+      Best regards,<br>
+      <strong>FirstStep Financials Team</strong>`
+    );
+
+    // ✅ Success response
+    return res.json({
+      status: true,
+      message: "Agent request rejected successfully",
+    });
+  } catch (err) {
+    console.error("RejectBecomeAnAgent Error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error",
+    });
+  }
+};

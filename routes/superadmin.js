@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { login, forgot, reset, confirmResetToken, logoutAdmin } = require('../controllers/superadmin/loginController');
 const { fetchLogs, fetchSingleLog } = require('../controllers/superadmin/logController');
-const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, reinstateCustomer, updateCustomer, changeUserPassword } = require('../controllers/superadmin/customerController');
+const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, reinstateCustomer, updateCustomer, changeUserPassword, ApproveBecomeAnAgent, RejectBecomeAnAgent } = require('../controllers/superadmin/customerController');
 const { fetchAllAgents, updateAgent, reinstateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
 const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers, updateProfileImage, updateName, changePassword } = require('../controllers/superadmin/adminController');
 const { createPrefunding, listPrefunding, approvePrefund, listPrefundingHistory, listPendingPrefunding, listApprovedPrefunding } = require('../controllers/superadmin/PrefundController');
@@ -36,6 +36,8 @@ router.post('/update/password', auth, changePassword);
 
 
 
+
+
 //customer
 router.get('/customer/all', auth, fetchAllCustomers);
 router.get('/customer/:user_id', auth, fetchSingleCustomer);
@@ -48,6 +50,8 @@ router.post('/customer/restore/:user_id', auth, restoreCustomer);
 router.post('/customer/reinstate/:user_id', auth, reinstateCustomer);
 router.post('/customer/update/:user_id', auth, updateCustomer);
 router.post('/customer/password/:user_id', auth, changeUserPassword);
+router.post('/customer/become_agent/approve', auth, ApproveBecomeAnAgent);
+router.post('/customer/become_agent/reject', auth, RejectBecomeAnAgent);
 
 
 
