@@ -565,21 +565,44 @@ exports.listRejectedKYC = async (req, res) => {
     const totalPages = Math.ceil(total / limit);
 
     // Fetch paginated rejected KYCs
+    // Fetch rejected KYC summary per user
     const [rows] = await pool.query(
       `SELECT 
           c.user_id,
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.profile_img,
+          ca.address,
+          u.kyc_status,
+          u.account_type,
           MAX(c.rejected_reason) AS rejected_reason,
           MAX(c.rejected_by) AS rejected_by,
           MAX(c.rejected_date) AS rejected_date
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
+       LEFT JOIN customer_addresses ca ON ca.user_id = c.user_id
        WHERE c.status = 'REJECTED'
        GROUP BY c.user_id
        ORDER BY MAX(c.rejected_date) DESC
        LIMIT ? OFFSET ?`,
       [limit, offset]
+    );
+
+    // Fetch each user's rejected documents and attach to result
+    const formattedRows = await Promise.all(
+      rows.map(async (user) => {
+        const [documents] = await pool.query(
+          `SELECT document_type, document_link, rejected_reason, rejected_by, rejected_date, date_uploaded 
+           FROM customer_kyc 
+           WHERE user_id = ? AND status = 'REJECTED' 
+           ORDER BY rejected_date DESC`,
+          [user.user_id]
+        );
+
+        return {
+          ...user,
+          documents, // attach array of documents
+        };
+      })
     );
 
     return res.status(200).json({
@@ -593,7 +616,7 @@ exports.listRejectedKYC = async (req, res) => {
         has_next: page < totalPages,
         has_prev: page > 1,
       },
-      data: rows,
+      data: formattedRows,
     });
   } catch (err) {
     console.error("Error listing rejected KYC:", err);
@@ -1273,3 +1296,132 @@ exports.rejectKYC = async (req, res) => {
   }
 };
 
+
+
+
+
+exports.resubmitKYCRequest = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { email_address } = req.body;
+    const action_by = req.user?.email || "SYSTEM"; // from middleware
+
+    if (!email_address) {
+      return res.status(400).json({
+        status: false,
+        message: "Email address is required",
+      });
+    }
+
+    // Check if user exists
+    const [userRows] = await connection.query(
+      "SELECT user_id, first_name FROM users_account WHERE email_address = ?",
+      [email_address]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const { user_id, first_name } = userRows[0];
+
+    // Fetch KYC records
+    const [kycRows] = await connection.query(
+      `SELECT user_id, document_type, document_link, date_uploaded, status, 
+              verification_notes, approved_by, approved_date, 
+              rejected_reason, rejected_by, rejected_date 
+       FROM customer_kyc 
+       WHERE user_id = ?`,
+      [user_id]
+    );
+
+    if (kycRows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No KYC records found for this user",
+      });
+    }
+
+    // Ensure at least one is REJECTED
+    const hasRejected = kycRows.some((doc) => doc.status === "REJECTED");
+    if (!hasRejected) {
+      return res.status(400).json({
+        status: false,
+        message: "Resubmission not allowed — no rejected KYC found",
+      });
+    }
+
+    // Start transaction
+    await connection.beginTransaction();
+
+    // Move all records to customer_kyc_rejected
+    const insertPromises = kycRows.map((row) =>
+      connection.query(
+        `INSERT INTO customer_kyc_rejected 
+         (user_id, document_type, document_link, date_uploaded, status, 
+          verification_notes, approved_by, approved_date, rejected_reason, 
+          rejected_by, rejected_date, archived_by, archived_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [
+          row.user_id,
+          row.document_type,
+          row.document_link,
+          row.date_uploaded,
+          row.status,
+          row.verification_notes,
+          row.approved_by,
+          row.approved_date,
+          row.rejected_reason,
+          row.rejected_by,
+          row.rejected_date,
+          action_by
+        ]
+      )
+    );
+
+    await Promise.all(insertPromises);
+
+    // Delete old KYC records for fresh resubmission
+    await connection.query("DELETE FROM customer_kyc WHERE user_id = ?", [user_id]);
+
+    // Log action
+    await logAction({
+      user_id,
+      action: "KYC_RESUBMISSION_REQUEST",
+      log_message: `User ${email_address} requested KYC resubmission after rejection.`,
+      status: "SUCCESS",
+      action_by,
+    });
+
+    // Send mail
+    await sendMail(
+      email_address,
+      "KYC Resubmission Request Accepted",
+      `Hi <strong>${first_name}</strong>,<br><br>
+      We’ve received your request to resubmit your KYC documents after a previous rejection.<br><br>
+      You can now upload fresh documents for verification.<br><br>
+      Best regards,<br>
+      <strong>FirstStep Financials Team</strong>`
+    );
+
+    // Commit transaction
+    await connection.commit();
+
+    return res.status(200).json({
+      status: true,
+      message: "KYC resubmission request processed successfully",
+    });
+  } catch (err) {
+    console.error("Error processing KYC resubmission:", err);
+    await connection.rollback();
+    return res.status(500).json({
+      status: false,
+      message: "Server error while processing KYC resubmission",
+    });
+  } finally {
+    connection.release();
+  }
+};

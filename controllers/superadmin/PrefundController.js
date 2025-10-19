@@ -75,7 +75,7 @@ exports.listPrefunding = async (req, res) => {
     // Fetch prefunding records
     const [rows] = await pool.query(
       `SELECT p.id, u.agent_id, u.business_name, u.phone_number contact, p.user_id, u.first_name, u.last_name, u.email_address, 
-              p.amount, p.initiated_by, a.fullname AS admin_full_name,
+              p.amount, p.initiated_by, a.fullname AS admin_full_name, u.business_name,
               p.approved_by, p.approved_date, p.status, p.date_created
        FROM prefunding p
        JOIN users_account u ON p.user_id = u.user_id
@@ -353,6 +353,7 @@ exports.listPendingPrefunding = async (req, res) => {
           p.user_id,
           u.agent_id,
           CONCAT(u.first_name, ' ', u.last_name) AS agent_name,
+          u.phone_number contact,
           u.profile_img,
           p.amount AS amount_funded,
           p.date_created AS date_inputed,
@@ -416,7 +417,7 @@ exports.listApprovedPrefunding = async (req, res) => {
           p.user_id,
           u.agent_id,
           CONCAT(u.first_name, ' ', u.last_name) AS agent_name,
-          u.profile_img,
+          u.profile_img,u.phone_number contact,
           p.amount AS amount_funded,
           p.date_created AS date_inputed,
           p.initiated_by,
@@ -484,7 +485,7 @@ exports.listRejectedPrefunding = async (req, res) => {
           p.user_id,
           u.agent_id,
           CONCAT(u.first_name, ' ', u.last_name) AS agent_name,
-          u.profile_img,
+          u.profile_img,u.phone_number contact,
           p.amount AS amount_funded,
           p.date_created AS date_inputed,
           p.initiated_by,

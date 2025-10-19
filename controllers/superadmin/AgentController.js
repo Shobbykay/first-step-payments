@@ -29,9 +29,15 @@ exports.fetchAllAgents = async (req, res) => {
 
         // Fetch paginated user agents
         const [rows] = await pool.query(
-            `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created 
-            FROM users_account 
-            WHERE account_type = 'AGENT'
+            `SELECT u.user_id, u.agent_id, u.account_type, u.phone_number, u.status, u.first_name, u.last_name, u.email_address, u.dob, IFNULL(u.address, ca.address) house_address, u.business_name, u.business_address, u.security_question, u.kyc_status, IFNULL(u.business_location, b.location) location, w.balance available_cash, u.date_created 
+            FROM users_account u
+            LEFT JOIN become_an_agent b
+            ON u.email_address = b.email_address
+            LEFT JOIN wallet_balance w
+            ON u.email_address = w.email_address
+            LEFT JOIN customer_addresses ca
+            ON ca.user_id = u.user_id
+            WHERE u.account_type = 'AGENT'
             ORDER BY date_created DESC
             LIMIT ? OFFSET ?`,
             [limit, offset]
@@ -40,7 +46,7 @@ exports.fetchAllAgents = async (req, res) => {
         // Transform rows: rename `status` -> `kyc_status`
         const formattedRows = rows.map(({ status, ...rest }) => ({
             ...rest,
-            kyc_status: statusMap[status] || "UNKNOWN"
+            status: statusMap[status] || "UNKNOWN"
         }));
 
         return res.json({

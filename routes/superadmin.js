@@ -7,7 +7,7 @@ const { fetchAllAgents, updateAgent, reinstateAgent, changeAgentPassword, fetchS
 const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers, updateProfileImage, updateName, changePassword } = require('../controllers/superadmin/adminController');
 const { createPrefunding, listPrefunding, approvePrefund, rejectPrefund, deletePrefund, listPrefundingHistory, listPendingPrefunding, listApprovedPrefunding, listRejectedPrefunding } = require('../controllers/superadmin/PrefundController');
 const { transferRate, fxRate, transfersService, getAgentCommissionFees, updateAgentCommissionFee } = require('../controllers/superadmin/FeesController');
-const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC, rejectCustomerKYC, listRejectedKYC, listApprovedKYC, listPendingCustomerKYC, listPendingKYC, listPendingAgentKYC, listCustomerToAgent, viewCustomerKYC, verifyKYC, rejectKYC } = require('../controllers/superadmin/KycController');
+const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC, rejectCustomerKYC, listRejectedKYC, listApprovedKYC, listPendingCustomerKYC, listPendingKYC, listPendingAgentKYC, listCustomerToAgent, viewCustomerKYC, verifyKYC, rejectKYC, resubmitKYCRequest } = require('../controllers/superadmin/KycController');
 const { fetchTickets, fetchSingleTicket, changeTicketStatus } = require('../controllers/superadmin/TicketController');
 const auth = require("../middleware/auth");
 
@@ -111,6 +111,7 @@ router.get('/kyc/customer_agent', auth, listCustomerToAgent);
 router.get('/kyc/:user_id', auth, viewCustomerKYC);
 router.post('/kyc/approve/:user_id', auth, verifyKYC);
 router.post('/kyc/reject/:user_id', auth, rejectKYC);
+router.post('/kyc/resubmit', auth, resubmitKYCRequest);
 
 
 
