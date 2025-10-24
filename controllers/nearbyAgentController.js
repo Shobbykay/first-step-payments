@@ -55,6 +55,7 @@ exports.listNearbyAgents = async (req, res) => {
         u.agent_id,
         u.first_name,
         u.last_name,
+        u.email_address,
         u.profile_img,
         u.phone_number,
         a.business_name,
@@ -103,14 +104,17 @@ exports.getRandomAgents = async (req, res) => {
       `
       SELECT 
         u.user_id,
-        u.email_address,
+        u.agent_id,
+        u.first_name,
+        u.last_name,
+        u.profile_img,
+        u.phone_number,
         a.business_name,
         a.business_address,
         a.location,
         a.business_hours,
-        u.first_name,
-        u.last_name,
-        u.profile_img
+        a.is_verified,
+        "AVAILABLE" is_online
       FROM become_an_agent a
       INNER JOIN users_account u 
         ON a.email_address = u.email_address

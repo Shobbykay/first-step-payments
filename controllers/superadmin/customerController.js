@@ -29,7 +29,7 @@ exports.fetchAllCustomers = async (req, res) => {
 
         // Fetch paginated users
         const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created 
+            `SELECT user_id, account_type, phone_number, status, kyc_status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created 
             FROM users_account 
             WHERE account_type = 'USER'
             AND status='ACTIVE'
@@ -39,10 +39,10 @@ exports.fetchAllCustomers = async (req, res) => {
         );
 
         // Transform rows: rename `status` -> `kyc_status`
-        const formattedRows = rows.map(({ status, ...rest }) => ({
-            ...rest,
-            kyc_status: statusMap[status] || "UNKNOWN"
-        }));
+        // const formattedRows = rows.map(({ status, ...rest }) => ({
+        //     ...rest,
+        //     kyc_status: statusMap[status] || "UNKNOWN"
+        // }));
 
         return res.json({
             status: true,
