@@ -54,7 +54,7 @@ exports.fetchAllCustomers = async (req, res) => {
                     totalPages,
                     limit
                 },
-                records: formattedRows
+                records: rows
             }
         });
 
