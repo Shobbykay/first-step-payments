@@ -16,5 +16,6 @@ Thumbs.db
 .vscode/
 .idea/
 
+#
 # firebase
 firebase-service-account.json
