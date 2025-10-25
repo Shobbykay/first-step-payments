@@ -9,7 +9,7 @@ const { createPrefunding, listPrefunding, approvePrefund, rejectPrefund, deleteP
 const { transferRate, fxRate, transfersService, getAgentCommissionFees, updateAgentCommissionFee } = require('../controllers/superadmin/FeesController');
 const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC, rejectCustomerKYC, listRejectedKYC, listApprovedKYC, listPendingCustomerKYC, listPendingKYC, listPendingAgentKYC, listCustomerToAgent, viewCustomerKYC, verifyKYC, rejectKYC, resubmitKYCRequest } = require('../controllers/superadmin/KycController');
 const { fetchTickets, fetchSingleTicket, changeTicketStatus } = require('../controllers/superadmin/TicketController');
-const { broadcastNotification } = require('../controllers/superadmin/NotifyController');
+const { broadcastNotification, listNotifications, sendDraftNotification } = require('../controllers/superadmin/NotifyController');
 const auth = require("../middleware/auth");
 
 //auth
@@ -133,5 +133,7 @@ router.post('/tickets/:ticket_id/status', auth, changeTicketStatus);
 
 //notifications
 router.post('/notification/broadcast', auth, broadcastNotification);
+router.get('/notification/list', auth, listNotifications);
+router.post('/notification/send_draft', auth, sendDraftNotification);
 
 module.exports = router;
