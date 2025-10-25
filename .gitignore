@@ -17,4 +17,4 @@ Thumbs.db
 .idea/
 
 # firebase
-# firebase-service-account.json
+firebase-service-account.json
