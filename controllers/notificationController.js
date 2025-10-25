@@ -118,3 +118,56 @@ exports.retrieve_notifications = async (req, res) => {
   }
   
 };
+
+
+
+
+
+exports.register_token = async (req, res) => {
+  const { fcm_token } = req.body;
+  const { user_id } = req.user;
+
+  if (!user_id || !fcm_token) {
+    return res.status(400).json({
+      status: false,
+      message: "user_id and fcm_token are required",
+    });
+  }
+
+  try {
+    // Check if a record exists for this user
+    const [existing] = await pool.query(
+      "SELECT id, fcm_token FROM user_tokens WHERE user_id = ?",
+      [user_id]
+    );
+
+    if (existing.length > 0) {
+      // Update existing record if token is different
+      const oldToken = existing[0].fcm_token;
+      if (oldToken !== fcm_token) {
+        await pool.query(
+          "UPDATE user_tokens SET fcm_token = ?, updated_at = NOW() WHERE user_id = ?",
+          [fcm_token, user_id]
+        );
+      }
+    } else {
+      // Insert new record if none exists
+      await pool.query(
+        "INSERT INTO user_tokens (user_id, fcm_token, created_at) VALUES (?, ?, NOW())",
+        [user_id, fcm_token]
+      );
+    }
+
+    return res.json({
+      status: true,
+      message: "Token registered or updated successfully",
+    });
+  } catch (error) {
+    console.error("Error saving token:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Database error",
+      error: error.message,
+    });
+  }
+}

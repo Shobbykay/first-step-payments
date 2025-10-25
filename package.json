@@ -23,6 +23,7 @@
     "dotenv": "^16.4.5",
     "esbuild": "^0.25.9",
     "express": "^5.1.0",
+    "firebase-admin": "^13.5.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",

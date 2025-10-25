@@ -15,6 +15,15 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 
+// suppress punycode warning
+process.removeAllListeners("warning");
+process.on("warning", (warning) => {
+  if (!warning.message.includes("punycode")) {
+    console.warn(warning.name, warning.message);
+  }
+});
+
+
 // 🔌 Connect to MySQL using env variables
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
