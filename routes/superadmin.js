@@ -5,7 +5,7 @@ const { fetchLogs, fetchSingleLog } = require('../controllers/superadmin/logCont
 const { fetchAllCustomers, fetchSingleCustomer, fetchSuspendedCustomers, fetchArchiveCustomers, suspendCustomer, closeCustomer, deleteCustomer, restoreCustomer, reinstateCustomer, updateCustomer, changeUserPassword, ApproveBecomeAnAgent, RejectBecomeAnAgent } = require('../controllers/superadmin/customerController');
 const { fetchAllAgents, updateAgent, reinstateAgent, changeAgentPassword, fetchSingleAgent, fetchSuspendedAgents, fetchArchiveAgents, suspendAgent, closeAgent, deleteAgent, restoreAgent } = require('../controllers/superadmin/AgentController');
 const { addAdminUser, adminListOtps, addPassword, verifyAdminOtp, deactivateAdmin, reactivateAdmin, changeRole, listAdminUsers, updateProfileImage, updateName, changePassword } = require('../controllers/superadmin/adminController');
-const { createPrefunding, listPrefunding, approvePrefund, rejectPrefund, deletePrefund, listPrefundingHistory, listPendingPrefunding, listApprovedPrefunding, listRejectedPrefunding } = require('../controllers/superadmin/PrefundController');
+const { createPrefunding, listPrefunding, approvePrefund, rejectPrefund, deletePrefund, listPrefundingHistory, listPendingPrefunding, listApprovedPrefunding, listRejectedPrefunding, getPrefundingMetrics } = require('../controllers/superadmin/PrefundController');
 const { transferRate, fxRate, transfersService, getAgentCommissionFees, updateAgentCommissionFee } = require('../controllers/superadmin/FeesController');
 const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC, rejectCustomerKYC, listRejectedKYC, listApprovedKYC, listPendingCustomerKYC, listPendingKYC, listPendingAgentKYC, listCustomerToAgent, viewCustomerKYC, verifyKYC, rejectKYC, resubmitKYCRequest } = require('../controllers/superadmin/KycController');
 const { fetchTickets, fetchSingleTicket, changeTicketStatus } = require('../controllers/superadmin/TicketController');
@@ -82,6 +82,7 @@ router.get('/agent/prefund/history/:user_id', auth, listPrefundingHistory);
 router.get('/agent/prefund/pending', auth, listPendingPrefunding);
 router.get('/agent/prefund/approved', auth, listApprovedPrefunding);
 router.get('/agent/prefund/rejected', auth, listRejectedPrefunding);
+router.get('/agent/prefund/metrics', auth, getPrefundingMetrics);
 
 
 

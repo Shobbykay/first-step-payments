@@ -570,6 +570,8 @@ exports.listRejectedKYC = async (req, res) => {
       `SELECT 
           c.user_id,
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
+          u.email_address,
+          u.phone_number,
           u.profile_img,
           ca.address,
           u.kyc_status,
@@ -1039,7 +1041,7 @@ exports.viewCustomerKYC = async (req, res) => {
       [user_id]
     );
 
-    // --- Combine response ---
+    // --- response ---
     const response = {
       ...customerInfo,
       documents: docs,

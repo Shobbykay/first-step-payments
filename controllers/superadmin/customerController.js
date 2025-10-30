@@ -16,160 +16,295 @@ const statusMap = {
 };
 
 exports.fetchAllCustomers = async (req, res) => {
-    try {
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    let offset = (page - 1) * limit;
 
-        let page = parseInt(req.query.page) || 1;
-        let limit = parseInt(req.query.limit) || 10;
-        let offset = (page - 1) * limit;
+    // Get total count
+    const [countResult] = await pool.query(`
+      SELECT COUNT(*) AS total 
+      FROM users_account 
+      WHERE account_type='USER' 
+      AND status IN (0,1)
+    `);
 
-        // Get total count
-        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='USER' AND status IN (0,1)");
-        const total = countResult[0].total;
-        const totalPages = Math.ceil(total / limit);
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
 
-        // Fetch paginated users
-        const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, kyc_status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created 
-            FROM users_account 
-            WHERE account_type = 'USER'
-            AND status='ACTIVE'
-            ORDER BY date_created DESC
-            LIMIT ? OFFSET ?`,
-            [limit, offset]
-        );
+    // Fetch paginated users
+    const [rows] = await pool.query(
+      `SELECT 
+          user_id,
+          account_type,
+          phone_number,
+          first_name,
+          last_name,
+          email_address,
+          dob,
+          business_name,
+          business_address,
+          security_question,
+          status,
+          kyc_status,
+          date_created
+       FROM users_account 
+       WHERE account_type = 'USER'
+       AND status IN (0,1)
+       ORDER BY date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
 
-        // Transform rows: rename `status` -> `kyc_status`
-        // const formattedRows = rows.map(({ status, ...rest }) => ({
-        //     ...rest,
-        //     kyc_status: statusMap[status] || "UNKNOWN"
-        // }));
-
-        return res.json({
-            status: true,
-            message: "User Accounts fetched successfully",
-            data: {
-                pagination: {
-                    total,
-                    page,
-                    totalPages,
-                    limit
-                },
-                records: rows
-            }
-        });
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ status: false, message: "Server error" });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No user accounts found"
+      });
     }
+
+    // Extract all user_ids to batch fetch KYC docs
+    const userIds = rows.map(r => r.user_id).filter(Boolean);
+    let kycDocs = [];
+    let linkedAccounts = [];
+
+    if (userIds.length > 0) {
+      const [kycRows] = await pool.query(
+        `SELECT * FROM customer_kyc WHERE user_id IN (?)`,
+        [userIds]
+      );
+      kycDocs = kycRows;
+
+      // Fetch linked accounts
+      const [linkedRows] = await pool.query(
+        `SELECT * FROM linked_accounts WHERE user_id IN (?)`,
+        [userIds]
+      );
+      linkedAccounts = linkedRows;
+    }
+
+    // Attach KYC documents to each customer record
+    const formattedRows = rows.map(customer => {
+      const customerKyc = kycDocs.filter(k => k.user_id === customer.user_id);
+      const agentLinked = linkedAccounts.filter(l => l.user_id === agent.user_id);
+
+      return {
+        ...customer,
+        status: statusMap[customer.status] || "UNKNOWN",
+        documents: customerKyc.length ? customerKyc : [],
+        linked_accounts: agentLinked.length ? agentLinked : []
+      };
+    });
+
+    return res.json({
+      status: true,
+      message: "User Accounts fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit
+        },
+        records: formattedRows
+      }
+    });
+
+  } catch (err) {
+    console.error("Fetch Customers Error:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
 };
+
 
 
 
 
 exports.fetchSuspendedCustomers = async (req, res) => {
-    try {
-        let page = parseInt(req.query.page) || 1;
-        let limit = parseInt(req.query.limit) || 10;
-        let offset = (page - 1) * limit;
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    let offset = (page - 1) * limit;
 
-        // Get total count of suspended users
-        const [countResult] = await pool.query(
-            "SELECT COUNT(*) as total FROM users_account WHERE status = 3 AND account_type = 'USER'"
-        );
-        const total = countResult[0].total;
-        const totalPages = Math.ceil(total / limit);
+    // Get total count of suspended users
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM users_account WHERE status = 3 AND account_type = 'USER'"
+    );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
 
-        // Fetch paginated suspended users
-        const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, suspension_reason
-             FROM users_account 
-             WHERE status = 3
-             AND account_type = 'USER'
-             ORDER BY date_created DESC
-             LIMIT ? OFFSET ?`,
-            [limit, offset]
-        );
+    // Fetch paginated suspended users
+    const [rows] = await pool.query(
+      `SELECT 
+          user_id, 
+          account_type, 
+          phone_number, 
+          status, 
+          kyc_status, 
+          first_name, 
+          last_name, 
+          email_address, 
+          dob, 
+          business_name, 
+          business_address, 
+          security_question, 
+          date_created, 
+          suspended_by,
+          suspension_reason,
+          suspended_date
+       FROM users_account 
+       WHERE status = 3
+       AND account_type = 'USER'
+       ORDER BY date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
 
-        // Transform rows: rename `status` -> `kyc_status`
-        const formattedRows = rows.map(({ status, ...rest }) => ({
-            ...rest,
-            kyc_status: statusMap[status] || "UNKNOWN"
-        }));
-
-        return res.json({
-            status: true,
-            message: "Suspended user accounts fetched successfully",
-            data: {
-                pagination: {
-                    total,
-                    page,
-                    totalPages,
-                    limit
-                },
-                records: formattedRows
-            }
-        });
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ status: false, message: "Server error" });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No suspended customer accounts found"
+      });
     }
+
+    // Extract user_ids for batch fetch
+    const userIds = rows.map(r => r.user_id).filter(Boolean);
+    let linkedAccounts = [];
+
+    if (userIds.length > 0) {
+      // Fetch linked accounts
+      const [linkedRows] = await pool.query(
+        `SELECT * FROM linked_accounts WHERE user_id IN (?)`,
+        [userIds]
+      );
+      linkedAccounts = linkedRows;
+    }
+
+    // Attach linked accounts to each customer
+    const formattedRows = rows.map(customer => {
+      const userLinked = linkedAccounts.filter(l => l.user_id === customer.user_id);
+      return {
+        ...customer,
+        status: statusMap[customer.status] || "UNKNOWN",
+        linked_accounts: userLinked.length ? userLinked : []
+      };
+    });
+
+    return res.json({
+      status: true,
+      message: "Suspended user accounts fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit
+        },
+        records: formattedRows
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
 };
+
 
 
 
 
 exports.fetchArchiveCustomers = async (req, res) => {
-    try {
-        //should show only CLOSED accounts
-        let page = parseInt(req.query.page) || 1;
-        let limit = parseInt(req.query.limit) || 10;
-        let offset = (page - 1) * limit;
+  try {
+    // Should show only CLOSED accounts
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    let offset = (page - 1) * limit;
 
-        // Get total count of archived users (deleted or closed)
-        const [countResult] = await pool.query(
-            "SELECT COUNT(*) as total FROM users_account WHERE status IN (5) AND account_type = 'USER'"
-        );
-        const total = countResult[0].total;
-        const totalPages = Math.ceil(total / limit);
+    // Get total count of archived (closed) users
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM users_account WHERE status IN (5) AND account_type = 'USER'"
+    );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
 
-        // Fetch paginated archived users
-        const [rows] = await pool.query(
-            `SELECT user_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, closure_reason, closed_by, closed_date
-             FROM users_account 
-             WHERE status IN (5)
-             AND account_type = 'USER'
-             ORDER BY date_created DESC
-             LIMIT ? OFFSET ?`,
-            [limit, offset]
-        );
+    // Fetch paginated archived users
+    const [rows] = await pool.query(
+      `SELECT 
+          user_id, 
+          account_type, 
+          phone_number, 
+          status, 
+          kyc_status, 
+          first_name, 
+          last_name, 
+          email_address, 
+          dob, 
+          business_name, 
+          business_address, 
+          security_question, 
+          date_created, 
+          closure_reason, 
+          closed_by, 
+          closed_date
+       FROM users_account 
+       WHERE status IN (5)
+       AND account_type = 'USER'
+       ORDER BY date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
 
-        // Transform rows: rename `status` -> `kyc_status`
-        const formattedRows = rows.map(({ status, ...rest }) => ({
-            ...rest,
-            kyc_status: statusMap[status] || "UNKNOWN"
-        }));
-
-        return res.json({
-            status: true,
-            message: "Archived user accounts fetched successfully",
-            data: {
-                pagination: {
-                    total,
-                    page,
-                    totalPages,
-                    limit
-                },
-                records: formattedRows
-            }
-        });
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ status: false, message: "Server error" });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No archived customer accounts found"
+      });
     }
+
+    // Extract user_ids for batch fetch
+    const userIds = rows.map(r => r.user_id).filter(Boolean);
+    let linkedAccounts = [];
+
+    if (userIds.length > 0) {
+      // Fetch linked accounts for all users
+      const [linkedRows] = await pool.query(
+        `SELECT * FROM linked_accounts WHERE user_id IN (?)`,
+        [userIds]
+      );
+      linkedAccounts = linkedRows;
+    }
+
+    // Attach linked accounts to each archived customer
+    const formattedRows = rows.map(customer => {
+      const userLinked = linkedAccounts.filter(l => l.user_id === customer.user_id);
+      return {
+        ...customer,
+        status: statusMap[customer.status] || "UNKNOWN",
+        linked_accounts: userLinked.length ? userLinked : []
+      };
+    });
+
+    return res.json({
+      status: true,
+      message: "Archived user accounts fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit
+        },
+        records: formattedRows
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
 };
+
 
 
 
@@ -182,11 +317,34 @@ exports.fetchSingleCustomer = async (req, res) => {
     
         // Fetch user by ID
         const [rows] = await pool.query(
-            `SELECT user_id, account_type, agent_id, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, security_answer, profile_img, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, date_created, date_updated
-            FROM users_account 
-            WHERE user_id = ? 
-            LIMIT 1`,
-            [user_id]
+        `SELECT 
+            user_id,
+            account_type,
+            agent_id,
+            phone_number,
+            first_name,
+            last_name,
+            email_address,
+            dob,
+            business_name,
+            business_address,
+            security_question,
+            security_answer,
+            profile_img,
+            status,
+            kyc_status,
+            suspension_reason,
+            suspended_by,
+            suspended_date,
+            closure_reason,
+            closed_by,
+            closed_date,
+            date_created,
+            date_updated
+        FROM users_account 
+        WHERE user_id = ? 
+        LIMIT 1`,
+        [user_id]
         );
 
         if (rows.length === 0) {
@@ -199,11 +357,21 @@ exports.fetchSingleCustomer = async (req, res) => {
         // Format user
         const user = {
             ...rows[0],
-            kyc_status: statusMap[rows[0].status] || "UNKNOWN"
+            status: statusMap[rows[0].status] || "UNKNOWN"
         };
 
         // Remove numeric status
-        delete user.status;
+        // delete user.status;
+
+        // Fetch KYC documents
+        const [kycDocs] = await pool.query(
+        `SELECT * FROM customer_kyc WHERE user_id = ?`,
+        [user_id]
+        );
+
+        // Attach both to the user object
+        user.documents = kycDocs.length ? kycDocs : [];
+
 
         return res.json({
             status: true,

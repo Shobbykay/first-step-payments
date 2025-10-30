@@ -17,37 +17,94 @@ const statusMap = {
 
 exports.fetchAllAgents = async (req, res) => {
     try {
-
         let page = parseInt(req.query.page) || 1;
         let limit = parseInt(req.query.limit) || 10;
         let offset = (page - 1) * limit;
 
-        // Get total count
-        const [countResult] = await pool.query("SELECT COUNT(*) as total FROM users_account WHERE account_type='AGENT' AND status IN (0,1)");
+        // Get total count of agents
+        const [countResult] = await pool.query(`
+            SELECT COUNT(*) AS total 
+            FROM users_account 
+            WHERE account_type = 'AGENT' 
+            AND status IN (0,1)
+        `);
         const total = countResult[0].total;
         const totalPages = Math.ceil(total / limit);
 
         // Fetch paginated user agents
-        const [rows] = await pool.query(
-            `SELECT u.user_id, u.agent_id, u.account_type, u.phone_number, u.status, u.first_name, u.last_name, u.email_address, u.dob, IFNULL(u.address, ca.address) house_address, u.business_name, u.business_address, u.security_question, u.kyc_status, IFNULL(u.business_location, b.location) location, w.balance available_cash, u.date_created 
+        const [rows] = await pool.query(`
+            SELECT 
+                u.user_id,
+                u.agent_id,
+                u.account_type,
+                u.phone_number,
+                u.status,
+                u.first_name,
+                u.last_name,
+                u.email_address,
+                u.dob,
+                IFNULL(u.address, ca.address) AS house_address,
+                IFNULL(u.business_hours, b.business_hours) AS business_hours,
+                u.business_name,
+                u.business_address,
+                u.security_question,
+                u.kyc_status,
+                IFNULL(u.business_location, b.location) AS location,
+                w.balance AS available_cash,
+                u.date_created
             FROM users_account u
-            LEFT JOIN become_an_agent b
-            ON u.email_address = b.email_address
-            LEFT JOIN wallet_balance w
-            ON u.email_address = w.email_address
-            LEFT JOIN customer_addresses ca
-            ON ca.user_id = u.user_id
+            LEFT JOIN become_an_agent b ON u.email_address = b.email_address
+            LEFT JOIN wallet_balance w ON u.email_address = w.email_address
+            LEFT JOIN customer_addresses ca ON ca.user_id = u.user_id
             WHERE u.account_type = 'AGENT'
-            ORDER BY date_created DESC
+            AND u.status IN (0,1)
+            ORDER BY u.date_created DESC
             LIMIT ? OFFSET ?`,
             [limit, offset]
         );
 
-        // Transform rows: rename `status` -> `kyc_status`
-        const formattedRows = rows.map(({ status, ...rest }) => ({
-            ...rest,
-            status: statusMap[status] || "UNKNOWN"
-        }));
+        // Extract all user_ids for batch operations
+        const userIds = rows.map(r => r.user_id).filter(Boolean);
+        let kycDocs = [];
+        let prefunding = [];
+        let linkedAccounts = [];
+
+        if (userIds.length > 0) {
+            // Fetch KYC docs
+            const [kycRows] = await pool.query(
+                `SELECT * FROM customer_kyc WHERE user_id IN (?)`,
+                [userIds]
+            );
+            kycDocs = kycRows;
+
+            // Fetch prefunding records
+            const [fundingRows] = await pool.query(
+                `SELECT * FROM prefunding WHERE user_id IN (?)`,
+                [userIds]
+            );
+            prefunding = fundingRows;
+
+            // Fetch linked accounts
+            const [linkedRows] = await pool.query(
+                `SELECT * FROM linked_accounts WHERE user_id IN (?)`,
+                [userIds]
+            );
+            linkedAccounts = linkedRows;
+        }
+
+        // Attach KYC docs and funding records
+        const formattedRows = rows.map(agent => {
+            const agentKyc = kycDocs.filter(k => k.user_id === agent.user_id);
+            const agentLinked = linkedAccounts.filter(l => l.user_id === agent.user_id);
+            const agentFunding = prefunding.filter(f => f.user_id === agent.user_id);
+            return {
+                ...agent,
+                status: statusMap[agent.status] || "UNKNOWN",
+                documents: agentKyc.length ? agentKyc : [],
+                funding: agentFunding.length ? agentFunding : [],
+                linked_accounts: agentLinked.length ? agentLinked : []
+            };
+        });
 
         return res.json({
             status: true,
@@ -72,22 +129,45 @@ exports.fetchAllAgents = async (req, res) => {
 
 
 
+
 exports.fetchSuspendedAgents = async (req, res) => {
   try {
     let page = parseInt(req.query.page) || 1;
     let limit = parseInt(req.query.limit) || 10;
     let offset = (page - 1) * limit;
 
-    // Get total count of suspended AGENT users
-    const [countResult] = await pool.query(
-      "SELECT COUNT(*) as total FROM users_account WHERE status = 3 AND account_type = 'AGENT'"
-    );
+    // Get total count of suspended AGENTs
+    const [countResult] = await pool.query(`
+      SELECT COUNT(*) AS total 
+      FROM users_account 
+      WHERE status = 3 
+      AND account_type = 'AGENT'
+    `);
+
     const total = countResult[0].total;
     const totalPages = Math.ceil(total / limit);
 
     // Fetch paginated suspended AGENTs
     const [rows] = await pool.query(
-      `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, suspension_reason, suspended_by, suspended_date
+      `SELECT 
+          user_id,
+          agent_id,
+          account_type,
+          phone_number,
+          status,
+          first_name,
+          last_name,
+          email_address,
+          dob,
+          business_name,
+          business_address,
+          business_hours,
+          security_question,
+          date_created,
+          kyc_status,
+          suspension_reason,
+          suspended_by,
+          suspended_date
        FROM users_account 
        WHERE status = 3
        AND account_type = 'AGENT'
@@ -103,11 +183,48 @@ exports.fetchSuspendedAgents = async (req, res) => {
       });
     }
 
-    // Transform rows: rename `status` -> `kyc_status`
-    const formattedRows = rows.map(({ status, ...rest }) => ({
-      ...rest,
-      kyc_status: statusMap[status] || "UNKNOWN",
-    }));
+    // Extract user_ids for batch fetch
+    const userIds = rows.map(r => r.user_id).filter(Boolean);
+    let kycDocs = [];
+    let prefunding = [];
+    let linkedAccounts = [];
+
+    if (userIds.length > 0) {
+      // Fetch KYC docs
+      const [kycRows] = await pool.query(
+        `SELECT * FROM customer_kyc WHERE user_id IN (?)`,
+        [userIds]
+      );
+      kycDocs = kycRows;
+
+      // Fetch prefunding records
+      const [fundingRows] = await pool.query(
+        `SELECT * FROM prefunding WHERE user_id IN (?)`,
+        [userIds]
+      );
+      prefunding = fundingRows;
+
+      // Fetch linked accounts
+      const [linkedRows] = await pool.query(
+        `SELECT * FROM linked_accounts WHERE user_id IN (?)`,
+        [userIds]
+      );
+      linkedAccounts = linkedRows;
+    }
+
+    // Attach KYC docs and funding records
+    const formattedRows = rows.map(agent => {
+      const agentKyc = kycDocs.filter(k => k.user_id === agent.user_id);
+      const agentFunding = prefunding.filter(f => f.user_id === agent.user_id);
+      const agentLinked = linkedAccounts.filter(l => l.user_id === agent.user_id);
+      return {
+        ...agent,
+        status: statusMap[agent.status] || "UNKNOWN",
+        documents: agentKyc.length ? agentKyc : [],
+        funding: agentFunding.length ? agentFunding : [],
+        linked_accounts: agentLinked.length ? agentLinked : []
+      };
+    });
 
     return res.json({
       status: true,
@@ -132,55 +249,125 @@ exports.fetchSuspendedAgents = async (req, res) => {
 
 
 
+
 exports.fetchArchiveAgents = async (req, res) => {
-    try {
-        let page = parseInt(req.query.page) || 1;
-        let limit = parseInt(req.query.limit) || 10;
-        let offset = (page - 1) * limit;
+  try {
+    let page = parseInt(req.query.page) || 1;
+    let limit = parseInt(req.query.limit) || 10;
+    let offset = (page - 1) * limit;
 
-        // Get total count of archived users (deleted or closed)
-        const [countResult] = await pool.query(
-            "SELECT COUNT(*) as total FROM users_account WHERE status IN (2, 5) AND account_type = 'AGENT'"
-        );
-        const total = countResult[0].total;
-        const totalPages = Math.ceil(total / limit);
+    // Get total count of archived agents (deleted or closed)
+    const [countResult] = await pool.query(`
+      SELECT COUNT(*) as total 
+      FROM users_account 
+      WHERE status IN (2, 5) 
+      AND account_type = 'AGENT'
+    `);
 
-        // Fetch paginated archived users
-        const [rows] = await pool.query(
-            `SELECT user_id, agent_id, account_type, phone_number, status, first_name, last_name, email_address, dob, business_name, business_address, security_question, date_created, closure_reason
-             FROM users_account 
-             WHERE status IN (2, 5)
-             AND account_type = 'AGENT'
-             ORDER BY date_created DESC
-             LIMIT ? OFFSET ?`,
-            [limit, offset]
-        );
+    const total = countResult[0].total;
+    const totalPages = Math.ceil(total / limit);
 
-        // Transform rows: rename `status` -> `kyc_status`
-        const formattedRows = rows.map(({ status, ...rest }) => ({
-            ...rest,
-            kyc_status: statusMap[status] || "UNKNOWN"
-        }));
+    // Fetch paginated archived agents
+    const [rows] = await pool.query(
+      `SELECT 
+          user_id,
+          agent_id,
+          account_type,
+          phone_number,
+          status,
+          first_name,
+          last_name,
+          email_address,
+          dob,
+          business_name,
+          business_location,
+          business_address,
+          business_hours,
+          security_question,
+          date_created,
+          closure_reason,
+          closed_by,
+          closed_date,
+          kyc_status
+       FROM users_account 
+       WHERE status IN (2, 5)
+       AND account_type = 'AGENT'
+       ORDER BY date_created DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
 
-        return res.json({
-            status: true,
-            message: "Archived Agent accounts fetched successfully",
-            data: {
-                pagination: {
-                    total,
-                    page,
-                    totalPages,
-                    limit
-                },
-                records: formattedRows
-            }
-        });
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ status: false, message: "Server error" });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No archived agent accounts found",
+      });
     }
+
+    // Extract user_ids to batch fetch related data
+    const userIds = rows.map(r => r.user_id).filter(Boolean);
+    let kycDocs = [];
+    let prefunding = [];
+    let linkedAccounts = [];
+
+    if (userIds.length > 0) {
+      // Fetch KYC documents
+      const [kycRows] = await pool.query(
+        `SELECT * FROM customer_kyc WHERE user_id IN (?)`,
+        [userIds]
+      );
+      kycDocs = kycRows;
+
+      // Fetch funding history
+      const [fundingRows] = await pool.query(
+        `SELECT * FROM prefunding WHERE user_id IN (?)`,
+        [userIds]
+      );
+      prefunding = fundingRows;
+
+      // Fetch linked accounts
+      const [linkedRows] = await pool.query(
+        `SELECT * FROM linked_accounts WHERE user_id IN (?)`,
+        [userIds]
+      );
+      linkedAccounts = linkedRows;
+    }
+
+    // Attach KYC docs & funding records to each archived agent, and linked accounts
+    const formattedRows = rows.map(agent => {
+      const agentKyc = kycDocs.filter(k => k.user_id === agent.user_id);
+      const agentFunding = prefunding.filter(f => f.user_id === agent.user_id);
+      const agentLinked = linkedAccounts.filter(l => l.user_id === agent.user_id);
+
+      return {
+        ...agent,
+        status: statusMap[agent.status] || "UNKNOWN",
+        documents: agentKyc.length ? agentKyc : [],
+        funding: agentFunding.length ? agentFunding : [],
+        linked_accounts: agentLinked.length ? agentLinked : []
+      };
+    });
+
+    return res.json({
+      status: true,
+      message: "Archived Agent accounts fetched successfully",
+      data: {
+        pagination: {
+          total,
+          page,
+          totalPages,
+          limit,
+        },
+        records: formattedRows,
+      },
+    });
+
+  } catch (err) {
+    console.error("Fetch Archived Agents Error:", err);
+    return res.status(500).json({ status: false, message: "Server error" });
+  }
 };
+
 
 
 

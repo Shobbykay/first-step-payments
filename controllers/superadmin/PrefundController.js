@@ -723,3 +723,33 @@ exports.deletePrefund = async (req, res) => {
     if (connection) connection.release();
   }
 };
+
+
+
+
+
+exports.getPrefundingMetrics = async (req, res) => {
+  try {
+    // Combined optimized query using subqueries
+    const [metrics] = await pool.query(`
+      SELECT 
+        COALESCE(SUM(amount), 0) AS total_amount_funded,
+        COUNT(DISTINCT user_id) AS total_agents_funded
+      FROM prefunding
+      WHERE status = 'APPROVED'
+    `);
+
+    // Return metrics
+    return res.json({
+      status: true,
+      message: "Prefunding metrics fetched successfully",
+      data: metrics[0]
+    });
+  } catch (err) {
+    console.error("Export Prefunding Metrics Error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error"
+    });
+  }
+};
