@@ -365,13 +365,14 @@ exports.updateUserProfile = async (req, res) => {
         }
 
         console.log(business_hours);
+        const businessHoursString = JSON.stringify(business_hours);
   
         updateQuery = `
           UPDATE users_account
           SET first_name = ?, last_name = ?, email_address = ?, dob = ?, business_name = ?, business_address = ?, business_hours = ?, password = ?, security_question = ?, security_answer = ?
           WHERE phone_number = ?
         `;
-        updateParams = [first_name, last_name, email_address, date_of_birth, business_name, business_address, business_hours, hash_password, security_question, security_answer, phone_number];
+        updateParams = [first_name, last_name, email_address, date_of_birth, business_name, business_address, businessHoursString, hash_password, security_question, security_answer, phone_number];
   
       } else {
         return res.status(400).json({ status: false, message: 'Unknown account type' });
