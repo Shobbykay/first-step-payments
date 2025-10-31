@@ -86,7 +86,7 @@ exports.fetchAllCustomers = async (req, res) => {
     // Attach KYC documents to each customer record
     const formattedRows = rows.map(customer => {
       const customerKyc = kycDocs.filter(k => k.user_id === customer.user_id);
-      const agentLinked = linkedAccounts.filter(l => l.user_id === agent.user_id);
+      const agentLinked = linkedAccounts.filter(l => l.user_id === customer.user_id);
 
       return {
         ...customer,
