@@ -24,6 +24,20 @@ const ALLOWED_MIME_TYPES = [
 
 
 exports.uploadKycDocuments = [
+  // 👇 Add this logger BEFORE multer
+  (req, res, next) => {
+    console.log("➡️ Incoming KYC upload request");
+
+    req.on("data", (chunk) => {
+      const chunkStr = chunk.toString();
+      // Rough preview of the multipart field names
+      const matches = [...chunkStr.matchAll(/name="([^"]+)"/g)].map((m) => m[1]);
+      if (matches.length) console.log("🧾 Field names detected:", matches);
+    });
+
+    next();
+  },
+
   upload.fields([
     { name: "document", maxCount: 1 },
     { name: "selfie", maxCount: 1 },
@@ -31,6 +45,9 @@ exports.uploadKycDocuments = [
   ]),
 
   async (req, res) => {
+    console.log("✅ Multer parsed files:", Object.keys(req.files || {}));
+    console.log("✅ Body fields:", req.body);
+
     const { user_id } = req.user || {};
     const { document_type, address } = req.body;
 
