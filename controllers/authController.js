@@ -363,6 +363,8 @@ exports.updateUserProfile = async (req, res) => {
         if (!first_name || !email_address || !business_name || !business_address || !password || !security_question || !security_answer || !business_hours) {
           return res.status(400).json({ status: false, message: 'Missing required AGENT fields' });
         }
+
+        console.log(business_hours);
   
         updateQuery = `
           UPDATE users_account
