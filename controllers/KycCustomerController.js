@@ -21,16 +21,13 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 
-
-
 exports.uploadKycDocuments = [
-  // 👇 Add this logger BEFORE multer
+  // Add this logger BEFORE multer
   (req, res, next) => {
-    console.log("➡️ Incoming KYC upload request");
+    console.log("Incoming KYC upload request");
 
     req.on("data", (chunk) => {
       const chunkStr = chunk.toString();
-      // Rough preview of the multipart field names
       const matches = [...chunkStr.matchAll(/name="([^"]+)"/g)].map((m) => m[1]);
       if (matches.length) console.log("🧾 Field names detected:", matches);
     });
@@ -42,6 +39,7 @@ exports.uploadKycDocuments = [
     { name: "document", maxCount: 1 },
     { name: "selfie", maxCount: 1 },
     { name: "utility_bill", maxCount: 1 },
+    { name: "business_license", maxCount: 1 }, // ✅ added as optional like selfie
   ]),
 
   async (req, res) => {
@@ -55,18 +53,20 @@ exports.uploadKycDocuments = [
       return res.status(401).json({ status: false, message: "Unauthorized" });
     }
 
-    if (!document_type || !ALLOWED_DOC_TYPES.includes(document_type)) {
+    // document_type is required only for main ID documents
+    if (document_type && !ALLOWED_DOC_TYPES.includes(document_type)) {
       return res.status(400).json({
         status: false,
-        message: `document_type is required and must be one of: ${ALLOWED_DOC_TYPES.join(", ")}`,
+        message: `document_type must be one of: ${ALLOWED_DOC_TYPES.join(", ")}`,
       });
     }
 
     const documentFile = req.files?.document?.[0];
     const selfieFile = req.files?.selfie?.[0];
     const utilityBillFile = req.files?.utility_bill?.[0];
+    const businessLicenseFile = req.files?.business_license?.[0];
 
-    if (!documentFile && !selfieFile && !utilityBillFile && !address) {
+    if (!documentFile && !selfieFile && !utilityBillFile && !businessLicenseFile && !address) {
       return res.status(400).json({ status: false, message: "At least one file or address must be provided" });
     }
 
@@ -82,7 +82,6 @@ exports.uploadKycDocuments = [
     };
 
     try {
-      // Fetch user details
       const [userResult] = await pool.query(
         "SELECT email_address, first_name FROM users_account WHERE user_id = ? LIMIT 1",
         [user_id]
@@ -97,11 +96,11 @@ exports.uploadKycDocuments = [
       let documentUrl = null;
       let selfieUrl = null;
       let utilityBillUrl = null;
-
+      let businessLicenseUrl = null;
       let skippedDocs = [];
 
-      // --- Upload Main Document ---
-      if (documentFile) {
+      // --- Upload Main ID Document ---
+      if (documentFile && document_type) {
         const [existingDoc] = await pool.query(
           "SELECT user_id FROM customer_kyc WHERE user_id = ? AND document_type = ? LIMIT 1",
           [user_id, document_type]
@@ -139,8 +138,7 @@ exports.uploadKycDocuments = [
 
         if (existingSelfie.length === 0) {
           validateFile(selfieFile);
-          const selfieFolder = `kyc/selfie`;
-          const selfieKey = `${selfieFolder}/${user_id}_${Date.now()}${path.extname(selfieFile.originalname)}`;
+          const selfieKey = `kyc/selfie/${user_id}_${Date.now()}${path.extname(selfieFile.originalname)}`;
           selfieUrl = await uploadToS3Buffer(selfieFile.buffer, selfieKey, selfieFile.mimetype);
 
           await pool.query(
@@ -155,9 +153,7 @@ exports.uploadKycDocuments = [
             status: "SUCCESS",
             action_by: userEmail,
           });
-        } else {
-          skippedDocs.push("SELFIE");
-        }
+        } else skippedDocs.push("SELFIE");
       }
 
       // --- Optional Utility Bill Upload ---
@@ -169,8 +165,7 @@ exports.uploadKycDocuments = [
 
         if (existingUtility.length === 0) {
           validateFile(utilityBillFile);
-          const utilityFolder = `kyc/utility_bill`;
-          const utilityKey = `${utilityFolder}/${user_id}_${Date.now()}${path.extname(utilityBillFile.originalname)}`;
+          const utilityKey = `kyc/utility_bill/${user_id}_${Date.now()}${path.extname(utilityBillFile.originalname)}`;
           utilityBillUrl = await uploadToS3Buffer(utilityBillFile.buffer, utilityKey, utilityBillFile.mimetype);
 
           await pool.query(
@@ -185,9 +180,34 @@ exports.uploadKycDocuments = [
             status: "SUCCESS",
             action_by: userEmail,
           });
-        } else {
-          skippedDocs.push("UTILITY_BILL");
-        }
+        } else skippedDocs.push("UTILITY_BILL");
+      }
+
+      // --- Optional Business License Upload ---
+      if (businessLicenseFile) {
+        const [existingBusiness] = await pool.query(
+          "SELECT user_id FROM customer_kyc WHERE user_id = ? AND document_type = 'BUSINESS_LICENSE' LIMIT 1",
+          [user_id]
+        );
+
+        if (existingBusiness.length === 0) {
+          validateFile(businessLicenseFile);
+          const bizKey = `kyc/business_license/${user_id}_${Date.now()}${path.extname(businessLicenseFile.originalname)}`;
+          businessLicenseUrl = await uploadToS3Buffer(businessLicenseFile.buffer, bizKey, businessLicenseFile.mimetype);
+
+          await pool.query(
+            "INSERT INTO customer_kyc (user_id, document_type, document_link) VALUES (?, 'BUSINESS_LICENSE', ?)",
+            [user_id, businessLicenseUrl]
+          );
+
+          await logAction({
+            user_id,
+            action: "UPLOAD_BUSINESS_LICENSE",
+            log_message: "Uploaded business license (optional KYC)",
+            status: "SUCCESS",
+            action_by: userEmail,
+          });
+        } else skippedDocs.push("BUSINESS_LICENSE");
       }
 
       // --- Optional Address ---
@@ -210,11 +230,11 @@ exports.uploadKycDocuments = [
       if (documentUrl) msgParts.push(`${document_type} uploaded`);
       if (selfieUrl) msgParts.push("selfie uploaded");
       if (utilityBillUrl) msgParts.push("utility bill uploaded");
+      if (businessLicenseUrl) msgParts.push("business license uploaded");
       if (skippedDocs.length > 0) msgParts.push(`skipped existing: ${skippedDocs.join(", ")}`);
 
       const message = msgParts.length > 0 ? msgParts.join("; ") : "No new files uploaded";
 
-      // --- Response ---
       return res.status(201).json({
         status: true,
         message,
@@ -222,6 +242,7 @@ exports.uploadKycDocuments = [
           ...(documentUrl && { document_url: documentUrl }),
           ...(selfieUrl && { selfie_url: selfieUrl }),
           ...(utilityBillUrl && { utility_bill_url: utilityBillUrl }),
+          ...(businessLicenseUrl && { business_license_url: businessLicenseUrl }),
         },
       });
     } catch (err) {
@@ -233,6 +254,7 @@ exports.uploadKycDocuments = [
     }
   },
 ];
+
 
 
 
