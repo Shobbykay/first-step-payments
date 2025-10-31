@@ -55,6 +55,7 @@ exports.uploadKycDocuments = [
 
     const validateFile = (file) => {
       const ext = path.extname(file.originalname).toLowerCase();
+      console.log("extension", ext);
       if (!ALLOWED_FILE_TYPES.includes(ext)) {
         throw new Error("Only JPG, PNG, and PDF files are allowed");
       }

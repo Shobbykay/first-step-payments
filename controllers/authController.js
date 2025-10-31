@@ -364,7 +364,6 @@ exports.updateUserProfile = async (req, res) => {
           return res.status(400).json({ status: false, message: 'Missing required AGENT fields' });
         }
 
-        console.log(business_hours);
         const businessHoursString = JSON.stringify(business_hours);
   
         updateQuery = `
