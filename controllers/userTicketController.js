@@ -23,14 +23,17 @@ const upload = multer({
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
   fileFilter: (req, file, cb) => {
     const filetypes = /jpeg|jpg|png/;
-    const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = filetypes.test(file.mimetype) || file.mimetype === 'application/octet-stream';
+    const ext = path.extname(file.originalname).toLowerCase();
+    const mimetype = file.mimetype;
 
-    console.log(extname, mimetype);
-    console.log(file.mimetype, path.extname(file.originalname).toLowerCase());
+    const extnameValid = filetypes.test(ext);
+    const mimetypeValid = filetypes.test(mimetype) || mimetype === 'application/octet-stream';
 
-    if (mimetype && extname) {
-      return cb(null, true);
+    console.log("Extension valid:", extnameValid);
+    console.log("MIME valid:", mimetypeValid, "| mimetype:", mimetype, "| ext:", ext);
+
+    if (extnameValid && mimetypeValid) {
+      cb(null, true);
     } else {
       cb(new Error("Only JPG and PNG images are allowed"));
     }
