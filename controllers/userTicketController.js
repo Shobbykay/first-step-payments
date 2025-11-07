@@ -105,7 +105,7 @@ exports.createTicket = [
       // Handle image (optional)
     let imageUrl = null;
       if (req.file) {
-        const allowedTypes = ["image/jpeg", "image/png"];
+        const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
         if (!allowedTypes.includes(req.file.mimetype)) {
           return res.status(400).json({
             status: false,
