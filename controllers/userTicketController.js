@@ -36,6 +36,7 @@ const upload = multer({
     if (extnameValid || mimetypeValid) {// &&
       cb(null, true);
     } else {
+      console.log("disallowed");
       cb(new Error("Only JPG and PNG images are allowed"));
     }
   },
