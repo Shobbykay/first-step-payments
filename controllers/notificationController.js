@@ -157,6 +157,7 @@ exports.get_user_notifications = async (req, res) => {
       "SECURITY",
       "PROMOTIONAL",
       "GENERAL",
+      "TRANSACTIONS"
     ];
 
     const placeholdersTopics = topics.map(() => "?").join(", ");
