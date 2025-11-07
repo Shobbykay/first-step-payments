@@ -470,7 +470,7 @@ exports.rejectAgentKYC = async (req, res) => {
     );
 
     if (docs.length === 0) {
-      return res.status(404).json({
+      return res.status(400).json({
         status: false,
         message: "Agent KYC document not found",
       });
