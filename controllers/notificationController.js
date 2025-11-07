@@ -122,6 +122,91 @@ exports.retrieve_notifications = async (req, res) => {
 
 
 
+exports.get_user_notifications = async (req, res) => {
+  const { user_id } = req.user; // from auth middleware (decoded token)
+  const page = parseInt(req.query.page) || 1; // current page (default = 1)
+  const limit = 20;
+  const offset = (page - 1) * limit;
+
+  try {
+    // Step 1: Fetch account type and KYC status
+    const [userRows] = await pool.query(
+      "SELECT account_type, kyc_status FROM users_account WHERE user_id = ? LIMIT 1",
+      [user_id]
+    );
+
+    if (userRows.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const { account_type, kyc_status } = userRows[0];
+
+    // Step 2: Build dynamic audience list
+    const audienceList = ["ALL_USERS", user_id]; // default audiences
+
+    if (account_type === "USER") audienceList.push("CUSTOMERS_ONLY");
+    if (account_type === "AGENT") audienceList.push("AGENTS_ONLY");
+    if (kyc_status === "PENDING") audienceList.push("PENDING_KYC");
+
+    // Step 3: Build query
+    const topics = [
+      "INFORMATIONAL",
+      "SECURITY",
+      "PROMOTIONAL",
+      "GENERAL",
+    ];
+
+    const placeholdersTopics = topics.map(() => "?").join(", ");
+    const placeholdersAudience = audienceList.map(() => "?").join(", ");
+
+    // Step 4: Fetch total count for pagination
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM notifications
+      WHERE topic IN (${placeholdersTopics})
+      OR audience IN (${placeholdersAudience})
+    `;
+    const [countRows] = await pool.query(countQuery, [...topics, ...audienceList]);
+    const totalRecords = countRows[0]?.total || 0;
+
+    // Step 5: Fetch paginated records
+    const dataQuery = `
+      SELECT id, title, message, topic, date_created 
+      FROM notifications
+      WHERE topic IN (${placeholdersTopics})
+      OR audience IN (${placeholdersAudience})
+      ORDER BY date_created DESC
+      LIMIT ? OFFSET ?
+    `;
+    const [notifications] = await pool.query(dataQuery, [...topics, ...audienceList, limit, offset]);
+
+    return res.json({
+      status: true,
+      message: "User notifications retrieved successfully",
+      pagination: {
+        current_page: page,
+        per_page: limit,
+        total_records: totalRecords,
+        total_pages: Math.ceil(totalRecords / limit),
+      },
+      data: notifications,
+    });
+
+  } catch (error) {
+    console.error("Get user notifications error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Database error",
+    });
+  }
+};
+
+
+
+
 
 exports.register_token = async (req, res) => {
   const { fcm_token } = req.body;

@@ -853,12 +853,15 @@ exports.listPendingAgentKYC = async (req, res) => {
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.phone_number,
           u.email_address,
+          IFNULL(ca.address, u.address) address,
           u.profile_img,
           c.date_uploaded AS submission_date,
+          u.kyc_status,
           c.document_type,
           c.document_link
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
+       LEFT JOIN customer_addresses ca ON ca.user_id = c.user_id
        WHERE c.status = 'PENDING'
        AND u.account_type = 'AGENT'
        ORDER BY c.date_uploaded DESC
