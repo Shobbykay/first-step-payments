@@ -640,7 +640,7 @@ exports.restoreCustomer = async (req, res) => {
         }
 
         // Restore account (set status back to 0 = pending)
-        await pool.query(`UPDATE users_account SET status = 0 WHERE user_id = ?`, [user_id]);
+        await pool.query(`UPDATE users_account SET status = 1 WHERE user_id = ?`, [user_id]);
 
         await logAction({
             user_id,
