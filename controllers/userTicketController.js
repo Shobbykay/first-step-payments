@@ -106,12 +106,12 @@ exports.createTicket = [
     let imageUrl = null;
       if (req.file) {
         const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
-        if (!allowedTypes.includes(req.file.mimetype)) {
-          return res.status(400).json({
-            status: false,
-            message: "Only JPG and PNG images are allowed",
-          });
-        }
+        // if (!allowedTypes.includes(req.file.mimetype)) {
+        //   return res.status(400).json({
+        //     status: false,
+        //     message: "Only JPG and PNG images are allowed",
+        //   });
+        // }
 
         // Max 4MB
         if (req.file.size > 4 * 1024 * 1024) {
