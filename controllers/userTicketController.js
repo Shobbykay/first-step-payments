@@ -33,7 +33,8 @@ const upload = multer({
     console.log("Extension valid:", extnameValid);
     console.log("MIME valid:", mimetypeValid, "| mimetype:", mimetype, "| ext:", ext);
 
-    if (extnameValid || mimetypeValid) {// &&
+    // if (extnameValid || mimetypeValid) {// &&
+    if (mimetypeValid) {
       cb(null, true);
     } else {
       console.log("disallowed");
