@@ -33,13 +33,11 @@ const upload = multer({
     console.log("Extension valid:", extnameValid);
     console.log("MIME valid:", mimetypeValid, "| mimetype:", mimetype, "| ext:", ext);
 
-    // if (extnameValid || mimetypeValid) {// &&
-    if (mimetypeValid) {
+    if (extnameValid || mimetypeValid) {// &&
       cb(null, true);
     } else {
-      console.log("disallowed");
-      // cb(new Error("Only JPG and PNG images are allowed"));
-      cb(null, true);
+      console.log("disallowed file type for ticket");
+      cb(new Error("Only JPG and PNG images are allowed"));
     }
   },
 });
@@ -105,13 +103,13 @@ exports.createTicket = [
       // Handle image (optional)
     let imageUrl = null;
       if (req.file) {
-        const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
-        // if (!allowedTypes.includes(req.file.mimetype)) {
-        //   return res.status(400).json({
-        //     status: false,
-        //     message: "Only JPG and PNG images are allowed",
-        //   });
-        // }
+        const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/octet-stream"];
+        if (!allowedTypes.includes(req.file.mimetype)) {
+          return res.status(400).json({
+            status: false,
+            message: "Only JPG and PNG images are allowed",
+          });
+        }
 
         // Max 4MB
         if (req.file.size > 4 * 1024 * 1024) {
