@@ -282,3 +282,90 @@ exports.closeAccount = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const { user_id } = req.user || {}; // from JWT middleware
+    if (!user_id) {
+      return res.status(401).json({
+        status: false,
+        message: "Unauthorized: Missing user ID",
+      });
+    }
+
+    const { first_name, last_name, dob } = req.body;
+
+    // Step 1: Fetch current user info for logging
+    const [userResult] = await pool.query(
+      "SELECT email_address, first_name FROM users_account WHERE user_id = ? LIMIT 1",
+      [user_id]
+    );
+
+    if (userResult.length === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    const userEmail = userResult[0].email_address;
+
+    // Step 2: Collect only provided fields (excluding email)
+    const fields = {};
+    if (first_name) fields.first_name = first_name;
+    if (last_name) fields.last_name = last_name;
+    if (dob) fields.dob = dob;
+
+    if (Object.keys(fields).length === 0) {
+      return res.status(400).json({
+        status: false,
+        message: "No fields provided to update",
+      });
+    }
+
+    // Step 3: Build dynamic SQL
+    const setClause = Object.keys(fields)
+      .map((key) => `${key} = ?`)
+      .join(", ");
+    const values = [...Object.values(fields), user_id];
+
+    const sql = `UPDATE users_account SET ${setClause} WHERE user_id = ?`;
+    const [result] = await pool.query(sql, values);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        status: false,
+        message: "No changes were made",
+      });
+    }
+
+    // Step 4: Log only on success
+    await logAction({
+      user_id,
+      action: "UPDATE_PROFILE",
+      log_message: `User profile updated successfully for ${userEmail}`,
+      status: "SUCCESS",
+      action_by: userEmail,
+    });
+
+    return res.status(200).json({
+      status: true,
+      message: "Profile updated successfully",
+    });
+  } catch (err) {
+    console.error("Update profile error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error",
+    });
+  }
+};
+
+
