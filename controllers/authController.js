@@ -689,23 +689,24 @@ exports.login = async (req, res) => {
     }
 
     // Validate KYC
-    const [rows_kyc] = await pool.query(
-      "SELECT status FROM customer_kyc WHERE user_id = ?",
-      [user.email_address]
-    );
+    // const [rows_kyc] = await pool.query(
+    //   "SELECT status FROM customer_kyc WHERE user_id = ?",
+    //   [user.email_address]
+    // );
 
-    let kyc_status = "PENDING";
+    // let kyc_status = "PENDING";
 
-    if (rows_kyc.length > 0) {
-      const allApproved = rows_kyc.every(row => row.status === "APPROVED");
-      kyc_status = allApproved ? "APPROVED" : "IN_REVIEW";
-    }
+    // if (rows_kyc.length > 0) {
+    //   const allApproved = rows_kyc.every(row => row.status === "APPROVED");
+    //   kyc_status = allApproved ? "APPROVED" : "IN_REVIEW";
+    // }
 
-    responseData.kyc_status = kyc_status;
+    // responseData.kyc_status = kyc_status;
 
-    if (user.kyc_status == "NOT_UPLOADED"){
-      responseData.kyc_status = user.kyc_status;
-    }
+    // if (user.kyc_status == "NOT_UPLOADED"){
+    //   responseData.kyc_status = user.kyc_status;
+    // }
+    responseData.kyc_status = user.kyc_status;
 
     return res.status(200).json({
       status: true,
