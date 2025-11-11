@@ -798,44 +798,42 @@ exports.listPendingCustomerKYC = async (req, res) => {
 
     const offset = (page - 1) * limit;
 
-    // Count total pending KYCs (not grouped)
+    // Count total distinct pending users (USER account type)
     const [countRows] = await pool.query(
-      `SELECT COUNT(*) AS total
+      `SELECT COUNT(DISTINCT c.user_id) AS total 
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
-       WHERE c.status = 'PENDING'
+       WHERE c.status = 'PENDING' 
        AND u.account_type = 'USER'`
     );
 
     const total = countRows[0]?.total || 0;
     const totalPages = Math.ceil(total / limit);
 
-    // Fetch all pending KYCs (not grouped)
+    // Fetch distinct pending KYCs grouped by user
     const [rows] = await pool.query(
       `SELECT 
           c.user_id,
-          c.document_type,
-          c.document_link,
-          c.status,
-          c.date_uploaded,
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.phone_number,
           u.email_address,
           u.profile_img,
           u.account_type,
-          u.kyc_status
+          u.kyc_status,
+          MAX(c.date_uploaded) AS latest_submission
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
        WHERE c.status = 'PENDING'
        AND u.account_type = 'USER'
-       ORDER BY c.date_uploaded DESC
+       GROUP BY c.user_id
+       ORDER BY latest_submission DESC
        LIMIT ? OFFSET ?`,
       [limit, offset]
     );
 
-    // Attach documents for each record’s user
+    // Fetch and attach documents for each user
     const formattedRows = await Promise.all(
-      rows.map(async (record) => {
+      rows.map(async (user) => {
         const [documents] = await pool.query(
           `SELECT 
               document_type, 
@@ -844,12 +842,12 @@ exports.listPendingCustomerKYC = async (req, res) => {
            FROM customer_kyc 
            WHERE user_id = ?
            ORDER BY date_uploaded DESC`,
-          [record.user_id]
+          [user.user_id]
         );
 
         return {
-          ...record,
-          documents, // all KYC documents by this user
+          ...user,
+          documents, // array of document objects
         };
       })
     );
@@ -879,8 +877,6 @@ exports.listPendingCustomerKYC = async (req, res) => {
 
 
 
-
-
 exports.listPendingAgentKYC = async (req, res) => {
   try {
     // Extract pagination parameters
@@ -890,9 +886,9 @@ exports.listPendingAgentKYC = async (req, res) => {
 
     const offset = (page - 1) * limit;
 
-    // Count distinct pending agent KYCs
+    // Count total pending agent KYCs
     const [countRows] = await pool.query(
-      `SELECT COUNT(DISTINCT c.user_id) AS total 
+      `SELECT COUNT(*) AS total 
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
        WHERE c.status = 'PENDING' 
@@ -902,48 +898,27 @@ exports.listPendingAgentKYC = async (req, res) => {
     const total = countRows[0]?.total || 0;
     const totalPages = Math.ceil(total / limit);
 
-    // Fetch distinct pending KYCs grouped by agent
+    // Fetch paginated pending agent KYCs
     const [rows] = await pool.query(
       `SELECT 
           c.user_id,
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.phone_number,
           u.email_address,
-          IFNULL(ca.address, u.address) AS address,
+          IFNULL(ca.address, u.address) address,
           u.profile_img,
+          c.date_uploaded AS submission_date,
           u.kyc_status,
-          u.account_type,
-          MAX(c.date_uploaded) AS latest_submission
+          c.document_type,
+          c.document_link
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
        LEFT JOIN customer_addresses ca ON ca.user_id = c.user_id
        WHERE c.status = 'PENDING'
        AND u.account_type = 'AGENT'
-       GROUP BY c.user_id
-       ORDER BY latest_submission DESC
+       ORDER BY c.date_uploaded DESC
        LIMIT ? OFFSET ?`,
       [limit, offset]
-    );
-
-    // Attach KYC documents for each agent
-    const formattedRows = await Promise.all(
-      rows.map(async (agent) => {
-        const [documents] = await pool.query(
-          `SELECT 
-              document_type, 
-              document_link, 
-              date_uploaded 
-           FROM customer_kyc 
-           WHERE user_id = ? AND status = 'PENDING'
-           ORDER BY date_uploaded DESC`,
-          [agent.user_id]
-        );
-
-        return {
-          ...agent,
-          documents, // array of pending KYC docs
-        };
-      })
     );
 
     return res.status(200).json({
@@ -957,7 +932,7 @@ exports.listPendingAgentKYC = async (req, res) => {
         has_next: page < totalPages,
         has_prev: page > 1,
       },
-      data: formattedRows,
+      data: rows,
     });
   } catch (err) {
     console.error("Error listing pending agent KYC:", err);
@@ -967,7 +942,6 @@ exports.listPendingAgentKYC = async (req, res) => {
     });
   }
 };
-
 
 
 
