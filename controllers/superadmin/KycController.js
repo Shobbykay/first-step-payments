@@ -979,6 +979,7 @@ exports.listCustomerToAgent = async (req, res) => {
           b.location,
           b.business_hours,
           b.business_license,
+          u.kyc_status,
           b.date_created AS applied_date
        FROM become_an_agent b
        INNER JOIN users_account u ON u.email_address = b.email_address
