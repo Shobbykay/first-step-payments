@@ -817,7 +817,7 @@ exports.listPendingCustomerKYC = async (req, res) => {
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.phone_number,
           u.email_address,
-          u.address,
+          IFNULL(u.address, ca.address) address,
           u.profile_img,
           u.account_type,
           u.kyc_status,
@@ -825,6 +825,7 @@ exports.listPendingCustomerKYC = async (req, res) => {
           c.date_uploaded AS latest_submission
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
+       LEFT JOIN customer_addresses ca ON ca.user_id = c.user_id
        WHERE c.status = 'PENDING'
        AND u.account_type = 'USER'
        ORDER BY latest_submission DESC
