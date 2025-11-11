@@ -817,6 +817,7 @@ exports.listPendingCustomerKYC = async (req, res) => {
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.phone_number,
           u.email_address,
+          u.address,
           u.profile_img,
           u.account_type,
           u.kyc_status,
