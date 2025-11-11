@@ -670,6 +670,7 @@ exports.login = async (req, res) => {
       wallet_balance: "0.00",
       account_status: status_[user.status],
       account_created: user.date_created,
+      kyc_status: user.kyc_status,
     };
 
     // business details
@@ -706,7 +707,16 @@ exports.login = async (req, res) => {
     // if (user.kyc_status == "NOT_UPLOADED"){
     //   responseData.kyc_status = user.kyc_status;
     // }
-    responseData.kyc_status = user.kyc_status;
+    // responseData.kyc_status = user.kyc_status;
+
+    // Check if user exists in become_an_agent and get verification status
+    const [agentRows] = await pool.query(
+      "SELECT is_verified FROM become_an_agent WHERE email_address = ? LIMIT 1",
+      [user.email_address]
+    );
+
+    responseData.is_become_agent_status =
+      agentRows.length > 0 ? agentRows[0].is_verified : null;
 
     return res.status(200).json({
       status: true,
