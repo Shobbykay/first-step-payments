@@ -813,7 +813,6 @@ exports.listPendingCustomerKYC = async (req, res) => {
     // Fetch all pending KYCs (not grouped)
     const [rows] = await pool.query(
       `SELECT 
-          c.id AS kyc_id,
           c.user_id,
           c.document_type,
           c.document_link,
