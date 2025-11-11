@@ -820,6 +820,7 @@ exports.listPendingCustomerKYC = async (req, res) => {
           u.profile_img,
           u.account_type,
           u.kyc_status,
+          c.document_type,
           c.date_uploaded AS latest_submission
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
