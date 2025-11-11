@@ -798,41 +798,45 @@ exports.listPendingCustomerKYC = async (req, res) => {
 
     const offset = (page - 1) * limit;
 
-    // Count total distinct pending users (USER account type)
+    // Count total pending KYCs (not grouped)
     const [countRows] = await pool.query(
-      `SELECT COUNT(DISTINCT c.user_id) AS total 
+      `SELECT COUNT(*) AS total
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
-       WHERE c.status = 'PENDING' 
+       WHERE c.status = 'PENDING'
        AND u.account_type = 'USER'`
     );
 
     const total = countRows[0]?.total || 0;
     const totalPages = Math.ceil(total / limit);
 
-    // Fetch distinct pending KYCs grouped by user
+    // Fetch all pending KYCs (not grouped)
     const [rows] = await pool.query(
       `SELECT 
+          c.id AS kyc_id,
           c.user_id,
+          c.document_type,
+          c.document_link,
+          c.status,
+          c.date_uploaded,
           CONCAT(u.first_name, ' ', u.last_name) AS customer_name,
           u.phone_number,
           u.email_address,
           u.profile_img,
           u.account_type,
-          u.kyc_status,
-          MAX(c.date_uploaded) AS latest_submission
+          u.kyc_status
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
        WHERE c.status = 'PENDING'
        AND u.account_type = 'USER'
-       ORDER BY latest_submission DESC
+       ORDER BY c.date_uploaded DESC
        LIMIT ? OFFSET ?`,
       [limit, offset]
     );
 
-    // Fetch and attach documents for each user
+    // Attach documents for each record’s user
     const formattedRows = await Promise.all(
-      rows.map(async (user) => {
+      rows.map(async (record) => {
         const [documents] = await pool.query(
           `SELECT 
               document_type, 
@@ -841,12 +845,12 @@ exports.listPendingCustomerKYC = async (req, res) => {
            FROM customer_kyc 
            WHERE user_id = ?
            ORDER BY date_uploaded DESC`,
-          [user.user_id]
+          [record.user_id]
         );
 
         return {
-          ...user,
-          documents, // array of document objects
+          ...record,
+          documents, // all KYC documents by this user
         };
       })
     );
@@ -872,6 +876,7 @@ exports.listPendingCustomerKYC = async (req, res) => {
     });
   }
 };
+
 
 
 
