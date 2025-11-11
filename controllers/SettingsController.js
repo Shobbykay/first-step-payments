@@ -292,7 +292,7 @@ exports.closeAccount = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const { user_id } = req.user || {}; // from JWT middleware
+    const { user_id } = req.user || {}; // from middleware
     if (!user_id) {
       return res.status(401).json({
         status: false,
@@ -300,9 +300,17 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-    const { first_name, last_name, dob } = req.body;
+    const {
+      first_name,
+      last_name,
+      dob,
+      business_name,
+      business_address,
+      business_location,
+      business_hours, // JSON
+    } = req.body;
 
-    // Step 1: Fetch current user info for logging
+    // Step 1: Fetch user info for logging
     const [userResult] = await pool.query(
       "SELECT email_address, first_name FROM users_account WHERE user_id = ? LIMIT 1",
       [user_id]
@@ -317,11 +325,29 @@ exports.updateProfile = async (req, res) => {
 
     const userEmail = userResult[0].email_address;
 
-    // Step 2: Collect only provided fields (excluding email)
+    // Step 2: Collect provided fields
     const fields = {};
     if (first_name) fields.first_name = first_name;
     if (last_name) fields.last_name = last_name;
     if (dob) fields.dob = dob;
+    if (business_name) fields.business_name = business_name;
+    if (business_address) fields.business_address = business_address;
+    if (business_location) fields.business_location = business_location;
+    if (business_hours) {
+      try {
+        // Ensure it's valid JSON
+        const parsedHours =
+          typeof business_hours === "string"
+            ? JSON.parse(business_hours)
+            : business_hours;
+        fields.business_hours = JSON.stringify(parsedHours);
+      } catch (jsonErr) {
+        return res.status(400).json({
+          status: false,
+          message: "Invalid JSON format for business_hours",
+        });
+      }
+    }
 
     if (Object.keys(fields).length === 0) {
       return res.status(400).json({
@@ -346,7 +372,7 @@ exports.updateProfile = async (req, res) => {
       });
     }
 
-    // Step 4: Log only on success
+    // Step 4: Log on success
     await logAction({
       user_id,
       action: "UPDATE_PROFILE",
@@ -367,5 +393,3 @@ exports.updateProfile = async (req, res) => {
     });
   }
 };
-
-
