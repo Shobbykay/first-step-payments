@@ -533,7 +533,7 @@ exports.login = async (req, res) => {
   try {
     // Find user
     const [rows] = await pool.query(
-      "SELECT u.user_id, first_name, last_name, phone_number, dob, address, u.email_address, password, account_type, security_question, IFNULL(b.business_name, u.business_name) business_name, IFNULL(b.business_address, u.business_address) business_address, IFNULL(b.location, u.business_location) business_location, IFNULL(b.business_hours, u.business_hours) business_hours, IFNULL(b.business_license, ck.document_link) business_license, u.status, u.date_created, agent_id, profile_img, is_2fa, 2fa_method twofa_method, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, b.is_verified is_business_verified, u.kyc_status FROM users_account u LEFT JOIN become_an_agent b ON b.email_address = u.email_address LEFT JOIN customer_kyc ck ON ck.user_id=u.user_id AND ck.document_type='BUSINESS_LICENSE' WHERE phone_number = ? LIMIT 1",
+      "SELECT u.user_id, first_name, last_name, phone_number, dob, address, u.email_address, password, account_type, security_question, IFNULL(b.business_name, u.business_name) business_name, IFNULL(b.business_address, u.business_address) business_address, IFNULL(b.location, u.business_location) business_location, IFNULL(b.business_hours, u.business_hours) business_hours, IFNULL(b.business_license, ck.document_link) business_license, u.status, u.date_created, agent_id, profile_img, is_2fa, 2fa_method twofa_method, suspension_reason, suspended_by, suspended_date, closure_reason, closed_by, closed_date, b.is_verified is_business_verified, u.kyc_status, balance FROM users_account u LEFT JOIN become_an_agent b ON b.email_address = u.email_address LEFT JOIN customer_kyc ck ON ck.user_id=u.user_id AND ck.document_type='BUSINESS_LICENSE' LEFT JOIN wallet_balance wb ON wb.email_address = u.email_address WHERE phone_number = ? LIMIT 1",
       [phone_number]
     );
 
@@ -667,7 +667,7 @@ exports.login = async (req, res) => {
       is_2fa_set: (user.is_2fa == 1) ? true : false,
       ...(user.is_2fa == 1 && { "2fa_method": user.twofa_method }),
       profile_img: user.profile_img,
-      wallet_balance: "0.00",
+      wallet_balance: user.balance,
       account_status: status_[user.status],
       account_created: user.date_created,
       kyc_status: user.kyc_status,
