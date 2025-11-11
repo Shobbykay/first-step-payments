@@ -715,8 +715,7 @@ exports.login = async (req, res) => {
       [user.email_address]
     );
 
-    responseData.is_become_agent_status =
-      agentRows.length > 0 ? agentRows[0].is_verified : null;
+    responseData.is_become_agent_status = agentRows.length > 0 ? agentRows[0].is_verified : null;
 
     return res.status(200).json({
       status: true,

@@ -1,4 +1,4 @@
-const { sha1Hex, hashPassword } = require("../../utils/utilities");
+const { sha1Hex, hashPassword, generateAgentId } = require("../../utils/utilities");
 const pool = require('../../services/db');
 const jwt = require("jsonwebtoken");
 const { sendMail } = require("../../utils/mailHelper");
@@ -977,6 +977,8 @@ exports.ApproveBecomeAnAgent = async (req, res) => {
       [verified_by, email_address]
     );
 
+    let agent_id = await generateAgentId();
+
     // Update users_account details
     await pool.query(
       `UPDATE users_account 
@@ -984,7 +986,8 @@ exports.ApproveBecomeAnAgent = async (req, res) => {
            business_address = ?, 
            business_location = ?, 
            business_hours = ?,
-           account_type = 'AGENT'
+           account_type = 'AGENT',
+           agent_id = ?
        WHERE email_address = ?`,
       [
         agent.business_name,
@@ -992,6 +995,7 @@ exports.ApproveBecomeAnAgent = async (req, res) => {
         agent.location,
         agent.business_hours,
         email_address,
+        agent_id
       ]
     );
 
