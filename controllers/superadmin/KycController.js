@@ -659,15 +659,42 @@ exports.listApprovedKYC = async (req, res) => {
           u.phone_number,
           u.email_address,
           u.profile_img,
+          u.account_type,
+          u.kyc_status,
+          ca.address,
           MAX(c.approved_by) AS approved_by,
           MAX(c.approved_date) AS approved_date
        FROM customer_kyc c
        INNER JOIN users_account u ON u.user_id = c.user_id
+       LEFT JOIN customer_addresses ca ON ca.user_id = c.user_id
        WHERE c.status = 'APPROVED'
        GROUP BY c.user_id
        ORDER BY MAX(c.approved_date) DESC
        LIMIT ? OFFSET ?`,
       [limit, offset]
+    );
+
+    // Fetch each user's approved documents and attach to result
+    const formattedRows = await Promise.all(
+      rows.map(async (user) => {
+        const [documents] = await pool.query(
+          `SELECT 
+              document_type, 
+              document_link, 
+              approved_by, 
+              approved_date, 
+              date_uploaded
+           FROM customer_kyc 
+           WHERE user_id = ? AND status = 'APPROVED'
+           ORDER BY approved_date DESC`,
+          [user.user_id]
+        );
+
+        return {
+          ...user,
+          documents, // attach array of approved documents
+        };
+      })
     );
 
     return res.status(200).json({
@@ -681,7 +708,7 @@ exports.listApprovedKYC = async (req, res) => {
         has_next: page < totalPages,
         has_prev: page > 1,
       },
-      data: rows,
+      data: formattedRows,
     });
   } catch (err) {
     console.error("Error listing approved KYC:", err);
@@ -691,6 +718,7 @@ exports.listApprovedKYC = async (req, res) => {
     });
   }
 };
+
 
 
 

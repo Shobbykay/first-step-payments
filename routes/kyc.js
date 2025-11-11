@@ -7,6 +7,4 @@ router.post('/upload/id', auth, uploadKycId);
 router.post('/upload', auth, uploadKycDocuments);
 router.get('/check', auth, getCustomerKyc);
 
-
-
 module.exports = router;
