@@ -825,7 +825,6 @@ exports.listPendingCustomerKYC = async (req, res) => {
        INNER JOIN users_account u ON u.user_id = c.user_id
        WHERE c.status = 'PENDING'
        AND u.account_type = 'USER'
-       GROUP BY c.user_id
        ORDER BY latest_submission DESC
        LIMIT ? OFFSET ?`,
       [limit, offset]
