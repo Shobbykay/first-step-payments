@@ -271,7 +271,7 @@ exports.updateUserProfile = async (req, res) => {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);//|| "your_jwt_secret" 
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
       console.log(err);
       return res.status(401).json({ status: false, message: "Invalid or expired token"+err });
@@ -412,20 +412,8 @@ exports.updateUserProfile = async (req, res) => {
       }
 
       console.log(user_id, phone_number);
-
-      // Sign JWT token
-      const new_token = jwt.sign(
-        {
-          user_id: user_id,
-          phone_number: phone_number,
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" } // adjust as needed
-      );
-
-      console.log("new token", new_token);
   
-      return res.status(200).json({ status: true, message: 'Profile updated successfully', token: new_token, data: rows[0] });
+      return res.status(200).json({ status: true, message: 'Profile updated successfully', data: rows[0] });
     } catch (err) {
       console.error('Error updating user profile:', err);
       return res.status(500).json({ status: false, message: 'Server error' });
