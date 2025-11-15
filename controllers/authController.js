@@ -151,7 +151,7 @@ exports.verifyOtp = async (req, res) => {
   
       // Generate JWT token
       const token = jwt.sign(
-        { user_id: user.id, phone_number: user.phone_number },
+        { user_id: user.user_id, phone_number: user.phone_number },
         process.env.JWT_SECRET || "your_jwt_secret",
         { expiresIn: "7d" } // token validity (7 days)
       );
