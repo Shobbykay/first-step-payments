@@ -408,8 +408,18 @@ exports.updateUserProfile = async (req, res) => {
           rows[0] = rest;
         }
       }
+
+      // Sign JWT token
+      const token = jwt.sign(
+        {
+          user_id: user_id,
+          phone_number: phone_number,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" } // adjust as needed
+      );
   
-      return res.status(200).json({ status: true, message: 'Profile updated successfully', data: rows[0] });
+      return res.status(200).json({ status: true, message: 'Profile updated successfully', token, data: rows[0] });
     } catch (err) {
       console.error('Error updating user profile:', err);
       return res.status(500).json({ status: false, message: 'Server error' });
@@ -420,7 +430,7 @@ exports.updateUserProfile = async (req, res) => {
 
 
 
-
+// old
 exports.updateUserDetails = async (req, res) => {
   const { user_id, first_name, last_name, email_address, dob, security_question, security_answer } = req.body;
 

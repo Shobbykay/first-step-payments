@@ -11,7 +11,7 @@ router.get('/resend_otp', resendOtp);
 router.get('/list_otps', listOtps);
 router.post('/refresh', refreshToken);
 router.post('/update_profile', updateUserProfile);
-router.post('/update_profile', updateUserDetails);
+// router.post('/update_profile', updateUserDetails);
 router.post('/login', login);
 router.post('/reset', resetPasswordRequest);
 router.post('/password', changePassword);
