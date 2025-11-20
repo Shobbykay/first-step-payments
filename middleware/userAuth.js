@@ -15,8 +15,6 @@ module.exports = async(req, res, next) => {
       return res.status(401).json({ status: false, message: "Token missing" });
     }
 
-    console.log(token);
-
     // Verify token
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
       if (err) {
@@ -31,8 +29,6 @@ module.exports = async(req, res, next) => {
         "SELECT user_id FROM users_account WHERE user_id = ? LIMIT 1",
         [decoded.user_id]
       );
-
-      console.log("middleware", decoded.user_id);
   
       if (rows.length === 0) {
         return res.status(401).json({ status: false, message: "Invalid user" });

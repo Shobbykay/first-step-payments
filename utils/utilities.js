@@ -37,6 +37,33 @@ exports.generateAgentId = async() => {
     return str;
 }
 
+exports.generatePickupId = async() => {
+  const random = Math.floor(1000000000 + Math.random() * 9000000000);
+  return `FSF-${random}`;
+}
+
+
+exports.generatePickupTransactionId = async() => {
+  const now = new Date();
+
+  const yyyy = now.getFullYear().toString();
+  const mm = (now.getMonth() + 1).toString().padStart(2, "0");
+  const dd = now.getDate().toString().padStart(2, "0");
+  const hh = now.getHours().toString().padStart(2, "0");
+  const min = now.getMinutes().toString().padStart(2, "0");
+  const ss = now.getSeconds().toString().padStart(2, "0");
+
+  const timestamp = `${yyyy}${mm}${dd}${hh}${min}${ss}`;
+
+  // Generate 3-digit random number (000-999)
+  const randomThree = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, "0");
+
+  return `FSF-${timestamp}${randomThree}`;
+}
+
+
 exports.allowedAdminRoles = () => {
   return [
     "ADMINISTRATOR",
