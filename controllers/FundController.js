@@ -23,7 +23,7 @@ exports.sendMoneyToRecipient_W2W = async (req, res) => {
     // Get sender email
     // ---------------------------------------------
     const [senderRows] = await conn.query(
-      "SELECT email_address FROM users_account WHERE user_id=?",
+      "SELECT email_address, first_name, last_name FROM users_account WHERE user_id=?",
       [user_id]
     );
 
@@ -32,12 +32,13 @@ exports.sendMoneyToRecipient_W2W = async (req, res) => {
     }
 
     const sender_email = senderRows[0].email_address;
+    const sender_name = senderRows[0].first_name + " " + senderRows[0].last_name;
 
     // ---------------------------------------------
     // Validate recipient exists
     // ---------------------------------------------
     const [recipientRows] = await conn.query(
-      "SELECT email_address FROM users_account WHERE user_id=?",
+      "SELECT email_address, first_name, last_name FROM users_account WHERE user_id=?",
       [recipient_user_id]
     );
 
@@ -46,6 +47,7 @@ exports.sendMoneyToRecipient_W2W = async (req, res) => {
     }
 
     const recipient_email = recipientRows[0].email_address;
+    const recipient_name = recipientRows[0].first_name + " " + recipientRows[0].last_name;
 
     // ---------------------------------------------
     // Check wallet balance
@@ -132,6 +134,53 @@ exports.sendMoneyToRecipient_W2W = async (req, res) => {
     );
 
     await conn.commit();
+
+
+    // Sender Email
+    sendMail(
+      sender_email,
+      `You Sent SLE${amount} Successfully`,
+      `
+        Hello <strong>${sender_name}</strong>,<br><br>
+
+        Your wallet transfer of <strong>SLE${amount}</strong> to 
+        <strong>${recipient_name}</strong> has been <strong>completed successfully</strong>.<br><br>
+
+        Transaction ID: <strong>${transaction_id}</strong><br>
+        Date: <strong>${new Date().toLocaleString()}</strong><br><br>
+
+        ${note ? `Note: ${note}<br><br>` : ""}
+
+        If you did not authorize this transaction, please contact our support team immediately.<br><br>
+
+        Best regards,<br>
+        <strong>First Step Payments Team</strong>
+      `
+    );
+
+
+    // Recipient Email
+    sendMail(
+      recipient_email,
+      `You Received SLE${amount} from ${sender_name}`,
+      `
+        Hello <strong>${recipient_name}</strong>,<br><br>
+
+        <strong>${sender_name}</strong> has sent you <strong>SLE${amount}</strong> via First Step Payments.<br><br>
+
+        Transaction ID: <strong>${transaction_id}</strong><br>
+        Date: <strong>${new Date().toLocaleString()}</strong><br><br>
+
+        ${note ? `Note: ${note}<br><br>` : ""}
+
+        Please check your wallet balance to confirm the funds have been credited.<br><br>
+
+        If you did not expect this transaction, please contact support immediately.<br><br>
+
+        Best regards,<br>
+        <strong>First Step Payments Team</strong>
+      `
+    );
 
     return res.status(200).json({
       status: true,
