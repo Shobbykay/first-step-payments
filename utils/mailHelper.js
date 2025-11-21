@@ -2,6 +2,9 @@ const nodemailer = require("nodemailer");
 
 // configure transporter (use your SMTP credentials, e.g. Gmail, SendGrid, Mailgun)
 const transporter = nodemailer.createTransport({
+  pool: true,
+  maxConnections: 10,
+  maxMessages: 100,
   host: process.env.MAIL_HOST,   // e.g. "smtp.gmail.com"
   port: process.env.MAIL_PORT,   // e.g. 465 for SSL or 587 for TLS
   secure: process.env.MAIL_SECURE === "false", // true for 465, false for 587

@@ -155,11 +155,13 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
       });
     }
 
+    const recipient_name = recipient[0].first_name + " " + recipient[0].last_name;
+
     // -------------------------------------------------------------
     // 3. Confirm sender exists + get sender email
     // -------------------------------------------------------------
     const [sender] = await pool.query(
-      "SELECT user_id, email_address FROM users_account WHERE user_id = ? LIMIT 1",
+      "SELECT user_id, email_address, first_name FROM users_account WHERE user_id = ? LIMIT 1",
       [sender_id]
     );
 
@@ -171,12 +173,13 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
     }
 
     const senderEmail = sender[0].email_address;
+    const first_name = sender[0].first_name;
 
     // -------------------------------------------------------------
     // 4. Confirm agent exists
     // -------------------------------------------------------------
     const [agent] = await pool.query(
-      "SELECT user_id, agent_id, email_address FROM users_account WHERE user_id = ? LIMIT 1",
+      "SELECT user_id, agent_id, email_address, first_name, last_name FROM users_account WHERE user_id = ? LIMIT 1",
       [agent_id]
     );
 
@@ -188,6 +191,8 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
     }
 
     const agent_id_new = agent[0].agent_id;
+    console.log("agent id", agent_id_new);
+    const agent_name = agent[0].first_name + " " + agent[0].last_name;
 
     // -------------------------------------------------------------
     // 5. Check sender wallet balance
@@ -205,6 +210,7 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
     }
 
     const senderBalance = Number(wallet[0].balance);
+    const newSenderBalance = senderBalance - Number(amount);
     if (senderBalance < Number(amount)) {
       return res.status(400).json({
         status: false,
@@ -248,7 +254,7 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
         AND created_at >= NOW() - INTERVAL 5 MINUTE
       LIMIT 1
       `,
-      [sender_id, recipient_user_id, agent_id_new, amount]
+      [sender_id, recipient_user_id, agent_id, amount]
     );
 
     if (duplicate.length > 0) {
@@ -285,6 +291,13 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
     const options = { day: '2-digit', month: 'short', year: 'numeric' };
     const validDate = sevenDaysLater.toLocaleDateString('en-US', options);
 
+    // DEBIT sender wallet
+    await pool.query(
+      `UPDATE wallet_balance SET balance=?, date_modified=NOW() WHERE email_address=?`,
+      [newSenderBalance, senderEmail]
+    );
+    
+
     // -------------------------------------------------------------
     // 10. Insert pickup request
     // -------------------------------------------------------------
@@ -303,8 +316,27 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
         created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', NOW())
       `,
-      [request_id, trans_id, pickup_code, sender_id, recipient_user_id, agent_id_new, amount, note]
+      [request_id, trans_id, pickup_code, sender_id, recipient_user_id, agent_id, amount, note]
     );
+
+
+    // Send email
+    sendMail(
+      senderEmail,
+      "Pickup Request of SLE"+amount,
+      `Hello <strong>${first_name}</strong>,<br><br>
+
+        Your pickup request of <strong>SLE${amount}</strong> has been successfully processed and sent to the recipient, <strong>${recipient_name}</strong>.<br><br>
+
+        This transaction was sent through our agent: <strong>${agent_name}</strong> and is pending approval.<br><br>
+
+        If you did not authorize this request, please contact our support team immediately.<br><br>
+
+        Best regards,<br>
+        <strong>First Step Payments Team</strong>
+      `
+    );
+
 
     // -------------------------------------------------------------
     // 11. Return success

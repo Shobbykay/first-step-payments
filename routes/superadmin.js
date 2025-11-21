@@ -10,7 +10,7 @@ const { transferRate, fxRate, transfersService, getAgentCommissionFees, updateAg
 const { fetchCustomersKYC, fetchAgentsKYC, approveCustomerKYC, approveAgentKYC, rejectAgentKYC, rejectCustomerKYC, listRejectedKYC, listApprovedKYC, listPendingCustomerKYC, listPendingKYC, listPendingAgentKYC, listCustomerToAgent, viewCustomerKYC, verifyKYC, rejectKYC, resubmitKYCRequest } = require('../controllers/superadmin/KycController');
 const { fetchTickets, fetchSingleTicket, changeTicketStatus } = require('../controllers/superadmin/TicketController');
 const { broadcastNotification, listNotifications, sendDraftNotification } = require('../controllers/superadmin/NotifyController');
-const { listPendingPickupRequest } = require('../controllers/superadmin/PickupController');
+const { listPendingPickupRequest, approvePickupRequest, cancelPickupRequest, listApprovedPickupRequest, listCancelledPickupRequest } = require('../controllers/superadmin/PickupController');
 const auth = require("../middleware/auth");
 
 //auth
@@ -141,9 +141,11 @@ router.post('/notification/send_draft', auth, sendDraftNotification);
 
 
 //pickup request
-router.post('/pickup/pending', auth, listPendingPickupRequest);
-// router.get('/notification/list', auth, listNotifications);
-// router.post('/notification/send_draft', auth, sendDraftNotification);
+router.get('/pickup/pending', auth, listPendingPickupRequest);
+router.post('/pickup/approve', auth, approvePickupRequest);
+router.post('/pickup/cancel', auth, cancelPickupRequest);
+router.get('/pickup/approved', auth, listApprovedPickupRequest);
+router.get('/pickup/cancelled', auth, listCancelledPickupRequest);
 
 
 module.exports = router;

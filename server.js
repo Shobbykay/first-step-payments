@@ -48,6 +48,8 @@ const kycRoutes = require('./routes/kyc');
 const nearbyAgentsRoutes = require('./routes/nearby_agent');
 const twofaRoutes = require('./routes/2fa');
 const pickupRoutes = require('./routes/pickup');
+const walletRoutes = require('./routes/wallet');
+const beneficiaryRoutes = require('./routes/beneficiary');
 const superadminRoutes = require('./routes/superadmin');
 
 app.use('/api', helloRoutes);
@@ -61,6 +63,8 @@ app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/nearby_agents', nearbyAgentsRoutes);
 app.use('/api/v1/2fa', twofaRoutes);
 app.use('/api/v1/pickup', pickupRoutes);
+app.use('/api/v1/wallet', walletRoutes);
+app.use('/api/v1/beneficiary', beneficiaryRoutes);
 app.use('/api/v1/superadmin', superadminRoutes);
 
 

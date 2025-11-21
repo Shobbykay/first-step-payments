@@ -220,7 +220,7 @@ exports.approvePrefund = async (req, res) => {
     await logAction({
       user_id,
       action: "APPROVE_PREFUND",
-      log_message: `Prefund of ₦${amount} approved and added to wallet. Previous balance: ₦${currentBalance}, New balance: ₦${newBalance}`,
+      log_message: `Prefund of SLE${amount} approved and added to wallet. Previous balance: SLE${currentBalance}, New balance: SLE${newBalance}`,
       status: "SUCCESS",
       action_by: approved_by,
     });
@@ -228,7 +228,7 @@ exports.approvePrefund = async (req, res) => {
     await logAction({
       user_id,
       action: "WALLET_CREDIT",
-      log_message: `Wallet credited with ₦${amount} after prefund approval by ${approved_by}. New balance: ₦${newBalance}`,
+      log_message: `Wallet credited with SLE${amount} after prefund approval by ${approved_by}. New balance: SLE${newBalance}`,
       status: "SUCCESS",
       action_by: approved_by,
     });
@@ -241,10 +241,10 @@ exports.approvePrefund = async (req, res) => {
       email_address,
       "Prefund Request Approved ✅",
       `Hi <strong>${first_name}</strong>,<br><br>
-      Your prefund request of <strong>₦${Number(amount).toLocaleString()}</strong> 
+      Your prefund request of <strong>SLE${Number(amount).toLocaleString()}</strong> 
       has been approved successfully.<br><br>
       Your wallet has been credited and your new balance is 
-      <strong>₦${Number(newBalance).toLocaleString()}</strong>.<br><br>
+      <strong>SLE${Number(newBalance).toLocaleString()}</strong>.<br><br>
       Best regards,<br>
       <strong>FirstStep Financials Team</strong>`
     );
@@ -252,7 +252,7 @@ exports.approvePrefund = async (req, res) => {
     // Response
     return res.status(200).json({
       status: true,
-      message: `Prefund approved successfully and wallet credited with ₦${Number(amount).toLocaleString()}`,
+      message: `Prefund approved successfully and wallet credited with SLE${Number(amount).toLocaleString()}`,
       transaction_id,
       new_balance: newBalance,
     });
@@ -611,7 +611,7 @@ exports.rejectPrefund = async (req, res) => {
     await logAction({
       user_id,
       action: "REJECT_PREFUND",
-      log_message: `Prefund of ₦${amount} rejected. Reason: ${rejected_reason}`,
+      log_message: `Prefund of SLE${amount} rejected. Reason: ${rejected_reason}`,
       status: "SUCCESS",
       action_by: rejected_by,
     });
@@ -625,7 +625,7 @@ exports.rejectPrefund = async (req, res) => {
       "Prefund Request Rejected",
       `Hi <strong>${first_name}</strong>,<br><br>
       We regret to inform you that your prefund request of 
-      <strong>₦${Number(amount).toLocaleString()}</strong> has been <strong>rejected</strong>.<br><br>
+      <strong>SLE${Number(amount).toLocaleString()}</strong> has been <strong>rejected</strong>.<br><br>
       <strong>Reason:</strong> ${rejected_reason}<br><br>
       You may review your request and try again if necessary.<br><br>
       Best regards,<br>
@@ -699,7 +699,7 @@ exports.deletePrefund = async (req, res) => {
     await logAction({
       user_id,
       action: "DELETE_PREFUND",
-      log_message: `Prefund record of ₦${amount} (status: ${status}) deleted by ${deleted_by}`,
+      log_message: `Prefund record of SLE${amount} (status: ${status}) deleted by ${deleted_by}`,
       status: "SUCCESS",
       action_by: deleted_by,
     });
