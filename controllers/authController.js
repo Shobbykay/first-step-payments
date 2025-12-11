@@ -32,10 +32,18 @@ exports.create_account_first = async (req, res) => {
     }
 
     // Validate phone_number length and numeric
-    if (!phone_number || phone_number.length !== 11 || /^\d{10}$/.test(phone_number)) {
-        return res.status(400).json({ 
+    if (
+        // If it starts with +, length must be 12 and the rest must be digits
+        (phone_number.startsWith('+') && (phone_number.length !== 12 || !/^\+\d{11}$/.test(phone_number)))
+
+        ||
+
+        // If it does NOT start with +, it must be exactly 11 digits
+        (!phone_number.startsWith('+') && !/^\d{11}$/.test(phone_number))
+    ) {
+        return res.status(400).json({
             status: false,
-            message: 'Phone number must be exactly 11 digits' + phone_number.length + !phone_number
+            message: 'Phone number must be 11 digits (no +) or 12 characters starting with +'
         });
     }
 

@@ -1,5 +1,6 @@
 const pool = require('../services/db');
 const logAction = require("../utils/logger");
+const { sendMail } = require("../utils/mailHelper");
 
 
 // Wallet to Wallet Transfer
