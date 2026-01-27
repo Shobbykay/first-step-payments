@@ -425,7 +425,7 @@ exports.CashPickupRegUser = async (req, res) => {
       `
       SELECT user_id, agent_id, first_name, last_name
       FROM users_account
-      WHERE user_id=? AND agent_id IS NOT NULL
+      WHERE agent_id=?
       LIMIT 1
       `,
       [agent_id]
@@ -518,7 +518,7 @@ exports.CashPickupRegUser = async (req, res) => {
     if (save_beneficiary === true) {
       await conn.query(
         `
-        INSERT INTO beneficiary_others
+        INSERT IGNORE INTO beneficiary_others
           (user_id, fullname, phone_number, city, date_created)
         VALUES (?, ?, ?, ?, NOW())
         `,
