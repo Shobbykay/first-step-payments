@@ -8,5 +8,6 @@ router.post('/search_recipient', auth, getRecipientByPhone);
 // router.get('/retrieve', auth, retrieve_notifications);
 // router.get('/get', auth, get_user_notifications);
 router.post('/send_agent_cash', auth, sendAgentCashForCashPickup);
+router.post('/cash_pickup', auth, sendAgentCashForCashPickup);
 
 module.exports = router;

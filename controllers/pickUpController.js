@@ -148,14 +148,11 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
       [recipient_user_id]
     );
 
-    if (recipient.length === 0) {
-      return res.status(404).json({
-        status: false,
-        message: "Recipient not found",
-      });
+    if (!recipient.length) {
+      return res.status(404).json({ status: false, message: "Recipient not found" });
     }
 
-    const recipient_name = recipient[0].first_name + " " + recipient[0].last_name;
+    const recipient_name = `${recipient[0].first_name} ${recipient[0].last_name}`;
 
     // -------------------------------------------------------------
     // 3. Confirm sender exists + get sender email
@@ -165,11 +162,8 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
       [sender_id]
     );
 
-    if (sender.length === 0) {
-      return res.status(404).json({
-        status: false,
-        message: "Sender account not found",
-      });
+    if (!sender.length) {
+      return res.status(404).json({ status: false, message: "Sender not found" });
     }
 
     const senderEmail = sender[0].email_address;
@@ -178,8 +172,13 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
     // -------------------------------------------------------------
     // 4. Confirm agent exists
     // -------------------------------------------------------------
-    const [agent] = await pool.query(
-      "SELECT user_id, agent_id, email_address, first_name, last_name FROM users_account WHERE user_id = ? LIMIT 1",
+    const [agent] = await conn.query(
+      `
+      SELECT user_id, agent_id, first_name, last_name
+      FROM users_account
+      WHERE user_id=? AND agent_id IS NOT NULL
+      LIMIT 1
+      `,
       [agent_id]
     );
 
@@ -190,9 +189,8 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
       });
     }
 
-    const agent_id_new = agent[0].agent_id;
-    console.log("agent id", agent_id_new);
-    const agent_name = agent[0].first_name + " " + agent[0].last_name;
+    const agent_id_db = agent[0].agent_id;
+    const agent_name = `${agent[0].first_name} ${agent[0].last_name}`;
 
     // -------------------------------------------------------------
     // 5. Check sender wallet balance
@@ -226,7 +224,7 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
       [sender_id]
     );
 
-    if (pinRow.length === 0) {
+    if (!pinRow.length) {
       return res.status(400).json({
         status: false,
         message: "You have not set a transaction PIN",
@@ -247,22 +245,31 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
     // -------------------------------------------------------------
     // 7. Check for duplicate pickup request within 5 minutes
     // -------------------------------------------------------------
-    const [duplicate] = await pool.query(
+    const [duplicate] = await conn.query(
       `
       SELECT request_id FROM pickup_request
-      WHERE sender_id=? AND recipient_user_id=? AND agent_id=? AND amount=? 
+      WHERE sender_id=? 
+        AND recipient_user_id=? 
+        AND agent_id=? 
+        AND amount=? 
+        AND status='PENDING'
         AND created_at >= NOW() - INTERVAL 5 MINUTE
       LIMIT 1
       `,
-      [sender_id, recipient_user_id, agent_id, amount]
+      [sender_id, recipient_user_id, agent_id_db, amount]
     );
 
     if (duplicate.length > 0) {
-      return res.status(200).json({
+      return res.status(409).json({
         status: false,
-        message: "Duplicate transaction. Try again in 5 minutes.",
+        message: "Duplicate pickup request detected. Please wait 5 minutes.",
       });
     }
+
+    // -------------------------------------------------------------
+    // Start TRANSACTION
+    // -------------------------------------------------------------
+    await conn.beginTransaction();
 
     // -------------------------------------------------------------
     // 8. Save recipient as beneficiary (optional)
@@ -354,5 +361,261 @@ exports.sendAgentCashForCashPickup = async (req, res) => {
       status: false,
       message: "Server error while processing pickup request",
     });
+  }
+};
+
+
+
+
+exports.CashPickupRegUser = async (req, res) => {
+  const conn = await pool.getConnection();
+
+  try {
+    // -------------------------------------------------------------
+    // 0. Extract inputs
+    // -------------------------------------------------------------
+    const {
+      agent_id,
+      amount,
+      transaction_pin,
+      note = "",
+      save_beneficiary = false,
+      receivers_fullname,
+      receivers_phonenumber,
+      receivers_city,
+    } = req.body;
+
+    const { user_id: sender_id } = req.user || {};
+
+    if (
+      !sender_id ||
+      !agent_id ||
+      !amount ||
+      !transaction_pin ||
+      !receivers_fullname ||
+      !receivers_phonenumber ||
+      !receivers_city ||
+      Number(amount) <= 0
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "All required fields must be provided",
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 1. Confirm sender
+    // -------------------------------------------------------------
+    const [sender] = await conn.query(
+      "SELECT user_id, email_address, first_name FROM users_account WHERE user_id=? LIMIT 1",
+      [sender_id]
+    );
+
+    if (!sender.length) {
+      return res.status(404).json({ status: false, message: "Sender not found" });
+    }
+
+    const senderEmail = sender[0].email_address;
+    const first_name = sender[0].first_name;
+
+    // -------------------------------------------------------------
+    // 2. Confirm agent
+    // -------------------------------------------------------------
+    const [agent] = await conn.query(
+      `
+      SELECT user_id, agent_id, first_name, last_name
+      FROM users_account
+      WHERE user_id=? AND agent_id IS NOT NULL
+      LIMIT 1
+      `,
+      [agent_id]
+    );
+
+    if (!agent.length) {
+      return res.status(404).json({ status: false, message: "Agent not found" });
+    }
+
+    const agent_id_db = agent[0].agent_id;
+    const agent_name = `${agent[0].first_name} ${agent[0].last_name}`;
+
+    // -------------------------------------------------------------
+    // 3. Validate transaction PIN
+    // -------------------------------------------------------------
+    const [pinRow] = await conn.query(
+      "SELECT pin FROM transaction_pin WHERE user_id=? LIMIT 1",
+      [sender_id]
+    );
+
+    if (!pinRow.length) {
+      return res.status(400).json({
+        status: false,
+        message: "You have not set a transaction PIN",
+      });
+    }
+
+    // Compare encrypted PIN
+    const decryptedPin = decrypt(pinRow[0].pin);
+
+    if (decryptedPin !== transaction_pin) {
+      return res.status(400).json({
+        status: false,
+        message: "Invalid transaction PIN",
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 4. Prevent duplicate pickup (5 mins)
+    // -------------------------------------------------------------
+    const [duplicate] = await conn.query(
+      `
+      SELECT request_id FROM pickup_request
+      WHERE sender_id=? 
+        AND agent_id=? 
+        AND amount=? 
+        AND receivers_phone=? 
+        AND status='PENDING'
+        AND created_at >= NOW() - INTERVAL 5 MINUTE
+      LIMIT 1
+      `,
+      [sender_id, agent_id_db, amount, receivers_phonenumber]
+    );
+
+    if (duplicate.length) {
+      return res.status(409).json({
+        status: false,
+        message: "Duplicate pickup request detected. Please wait 5 minutes.",
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 5. Begin transaction
+    // -------------------------------------------------------------
+    await conn.beginTransaction();
+
+    // -------------------------------------------------------------
+    // 6. Atomic wallet debit
+    // -------------------------------------------------------------
+    const [walletUpdate] = await conn.query(
+      `
+      UPDATE wallet_balance
+      SET balance = balance - ?, date_modified = NOW()
+      WHERE email_address = ? AND balance >= ?
+      `,
+      [amount, senderEmail, amount]
+    );
+
+    if (walletUpdate.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(400).json({
+        status: false,
+        message: "Insufficient wallet balance",
+      });
+    }
+
+    // -------------------------------------------------------------
+    // 7. Save beneficiary (others)
+    // -------------------------------------------------------------
+    if (save_beneficiary === true) {
+      await conn.query(
+        `
+        INSERT INTO beneficiary_others
+          (user_id, fullname, phone_number, city, date_created)
+        VALUES (?, ?, ?, ?, NOW())
+        `,
+        [sender_id, receivers_fullname, receivers_phonenumber, receivers_city]
+      );
+    }
+
+    // -------------------------------------------------------------
+    // 8. Generate IDs
+    // -------------------------------------------------------------
+    const pickup_code = Math.floor(
+      1000000000 + Math.random() * 9000000000
+    ).toString();
+
+    const request_id = `FSF-${pickup_code}`;
+    const transaction_id = await generatePickupTransactionId();
+
+    // -------------------------------------------------------------
+    // 9. Insert pickup request
+    // -------------------------------------------------------------
+    await conn.query(
+      `
+      INSERT INTO pickup_request (
+        request_id,
+        transaction_id,
+        pickup_code,
+        sender_id,
+        agent_id,
+        amount,
+        note,
+        receivers_fullname,
+        receivers_phone,
+        receivers_city,
+        status,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', NOW())
+      `,
+      [
+        request_id,
+        transaction_id,
+        pickup_code,
+        sender_id,
+        agent_id_db,
+        amount,
+        note,
+        receivers_fullname,
+        receivers_phonenumber,
+        receivers_city,
+      ]
+    );
+
+    // -------------------------------------------------------------
+    // 10. Commit
+    // -------------------------------------------------------------
+    await conn.commit();
+
+    // -------------------------------------------------------------
+    // 11. Email (non-blocking)
+    // -------------------------------------------------------------
+    try {
+      sendMail(
+        senderEmail,
+        `Cash Pickup Request of SLE${amount}`,
+        `
+        Hello <strong>${first_name}</strong>,<br><br>
+        Your cash pickup request of <strong>SLE${amount}</strong> has been created.<br><br>
+        Receiver: <strong>${receivers_fullname}</strong><br>
+        Phone: <strong>${receivers_phonenumber}</strong><br>
+        City: <strong>${receivers_city}</strong><br>
+        Agent: <strong>${agent_name}</strong><br><br>
+        Status: Pending approval.<br><br>
+        <strong>First Step Payments Team</strong>
+        `
+      );
+    } catch (mailErr) {
+      console.error("Pickup email failed:", mailErr);
+    }
+
+    // -------------------------------------------------------------
+    // 12. Response
+    // -------------------------------------------------------------
+    return res.status(200).json({
+      status: true,
+      message: "Cash pickup request created successfully",
+      request_id,
+      pickup_code,
+      valid_until: new Date(Date.now() + 7 * 86400000).toDateString(),
+    });
+
+  } catch (err) {
+    await conn.rollback();
+    console.error("CashPickupRegUser error:", err);
+    return res.status(500).json({
+      status: false,
+      message: "Server error while processing pickup request",
+    });
+  } finally {
+    conn.release();
   }
 };
