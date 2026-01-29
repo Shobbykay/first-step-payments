@@ -29,9 +29,10 @@ exports.listPendingPickupRequest = async (req, res) => {
           a.pickup_code,
           a.sender_id,
           CONCAT(b.first_name, ' ', b.last_name) AS sender_name,
+          a.receivers_fullname,
+          a.receivers_phone,
+          a.receivers_city,
           a.created_at AS pickup_request_date,
-          a.recipient_user_id,
-          CONCAT(c.first_name, ' ', c.last_name) AS recipient_name,
           a.agent_id,
           CONCAT(d.first_name, ' ', d.last_name) AS agent_name,
           a.amount,
@@ -39,8 +40,7 @@ exports.listPendingPickupRequest = async (req, res) => {
           a.status
        FROM pickup_request a
        LEFT JOIN users_account b ON a.sender_id = b.user_id
-       LEFT JOIN users_account c ON a.recipient_user_id = c.user_id
-       LEFT JOIN users_account d ON a.agent_id = d.user_id
+       LEFT JOIN users_account d ON a.agent_id = d.agent_id
        WHERE a.status = 'PENDING'
        ORDER BY a.created_at DESC
        LIMIT ? OFFSET ?`,
