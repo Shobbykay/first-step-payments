@@ -6,6 +6,8 @@ const jwt = require("jsonwebtoken");
 const { hashPassword, generateAgentId } = require("../utils/utilities");
 const { sendMail } = require("../utils/mailHelper");
 const bcrypt = require("bcrypt");
+const UAParser = require('ua-parser-js');
+const { sendSMS } = require("../utils/sms.service");
 
 
 let refreshTokens = [];
@@ -526,6 +528,183 @@ function getFormattedNow() {
 
 
 
+function getLoginEmailHtml({ firstName, deviceType, ipAddress, location, dateTime }) {
+  const currentYear = new Date().getFullYear();
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login Detected – FSF Wallet</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f4;padding:32px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:10px;overflow:hidden;
+                      box-shadow:0 2px 8px rgba(0,0,0,0.08);max-width:600px;width:100%;">
+ 
+          <!-- Header / Logo -->
+          <tr>
+            <td style="padding:32px 40px 20px 40px;">
+              <img
+                src="https://garunmallam-mfb.com/fsf/fsflogo.png"
+                alt="First Step Foreign Exchange Bureau"
+                width="160"
+                style="display:block;max-width:160px;"
+              />
+              <!--
+                Replace the src above with the actual hosted logo URL, e.g.:
+                src="https://yourdomain.com/assets/fsf-logo.png"
+              -->
+            </td>
+          </tr>
+ 
+          <!-- Title -->
+          <tr>
+            <td style="padding:0 40px 12px 40px;">
+              <h1 style="margin:0;font-size:22px;font-weight:700;color:#1a1a1a;">
+                Login Detected
+              </h1>
+            </td>
+          </tr>
+ 
+          <!-- Greeting -->
+          <tr>
+            <td style="padding:0 40px 16px 40px;font-size:15px;color:#333333;line-height:1.6;">
+              Hi <strong>${firstName}</strong>,
+            </td>
+          </tr>
+ 
+          <!-- Body text -->
+          <tr>
+            <td style="padding:0 40px 20px 40px;font-size:15px;color:#333333;line-height:1.6;">
+              We noticed a new login to your account from a device or location we haven't seen before:
+            </td>
+          </tr>
+ 
+          <!-- Login details box -->
+          <tr>
+            <td style="padding:0 40px 24px 40px;">
+              <table cellpadding="0" cellspacing="0" width="100%"
+                     style="background:#f9f9f9;border-left:4px solid #e03a2f;
+                            border-radius:6px;padding:16px 20px;">
+                <tr>
+                  <td style="padding:4px 0;font-size:14px;color:#333;">
+                    <strong style="color:#1a1a1a;">Device:</strong>&nbsp; ${deviceType}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:14px;color:#333;">
+                    <strong style="color:#1a1a1a;">IP Address:</strong>&nbsp; ${ipAddress}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:14px;color:#333;">
+                    <strong style="color:#1a1a1a;">Location:</strong>&nbsp; ${location}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-size:14px;color:#333;">
+                    <strong style="color:#1a1a1a;">Time:</strong>&nbsp; ${dateTime}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+ 
+          <!-- Action text -->
+          <tr>
+            <td style="padding:0 40px 24px 40px;font-size:15px;color:#333333;line-height:1.6;">
+              If this was you, no further action is needed.<br/>
+              If you don't recognize this login, please contact support immediately on
+              <a href="mailto:support@firststeppayments.com"><strong style="color:#e03a2f;">support@firststeppayments.com</strong></a>.
+            </td>
+          </tr>
+ 
+          <!-- Help text -->
+          <tr>
+            <td style="padding:0 40px 32px 40px;font-size:15px;color:#333333;line-height:1.6;">
+              Need help? Contact our support team anytime.
+            </td>
+          </tr>
+ 
+          <!-- Sign-off -->
+          <tr>
+            <td style="padding:0 40px 40px 40px;font-size:15px;color:#333333;line-height:1.8;">
+              Thanks for choosing FSF Wallet,<br/>
+              <strong>The FSF Wallet Team</strong>
+            </td>
+          </tr>
+ 
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f4f4f4;padding:24px 40px;text-align:center;border-top:1px solid #e8e8e8;">
+ 
+              <!-- Social icons -->
+              <table align="center" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+                <tr>
+                  <td style="padding:0 8px;">
+                    <a href="https://facebook.com" style="text-decoration:none;">
+                      <img src="https://cdn-icons-png.flaticon.com/24/733/733547.png"
+                           alt="Facebook" width="24" height="24" style="display:block;"/>
+                    </a>
+                  </td>
+                  <td style="padding:0 8px;">
+                    <a href="https://x.com" style="text-decoration:none;">
+                      <img src="https://cdn-icons-png.flaticon.com/24/5968/5968830.png"
+                           alt="X / Twitter" width="24" height="24" style="display:block;"/>
+                    </a>
+                  </td>
+                  <td style="padding:0 8px;">
+                    <a href="https://instagram.com" style="text-decoration:none;">
+                      <img src="https://cdn-icons-png.flaticon.com/24/2111/2111463.png"
+                           alt="Instagram" width="24" height="24" style="display:block;"/>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+ 
+              <!-- App store badges -->
+              <table align="center" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+                <tr>
+                  <td style="padding:0 6px;">
+                    <a href="https://play.google.com/store" style="text-decoration:none;">
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg"
+                           alt="Get it on Google Play" height="36" style="display:block;"/>
+                    </a>
+                  </td>
+                  <td style="padding:0 6px;">
+                    <a href="https://apps.apple.com" style="text-decoration:none;">
+                      <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg"
+                           alt="Download on the App Store" height="36" style="display:block;"/>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+ 
+              <p style="margin:0 0 4px;font-size:12px;color:#888888;">
+                &copy;${currentYear} First Step Financial Services
+              </p>
+              <p style="margin:0;font-size:12px;color:#888888;">
+                NP House 2ND Floor, Walpole Street, Freetown, Sierra Leone
+              </p>
+            </td>
+          </tr>
+ 
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+
+
+
 
 exports.login = async (req, res) => {
   const { phone_number, password } = req.body;
@@ -647,12 +826,39 @@ exports.login = async (req, res) => {
 
     const is_transaction_pin_set = (rows_pin.length > 0) ? true : false;  
 
+
+    // DEVICE TYPE DETAILS
+    const parser = new UAParser(req.headers['user-agent']);
+    const result = parser.getResult();
+
+    const deviceType = result.device.type || 'desktop';
+    let deviceType_full = deviceType;// + "(" + result.os.name + ")" + result.browser.name
+
+    // IP ADDRESS
+    const ip = req.headers['cf-connecting-ip'] ||
+      req.headers['x-forwarded-for']?.split(',')[0] ||
+      req.socket.remoteAddress;
+
+
+    // await sendSMS({
+    //   to: "30910977",
+    //   message: "Your FirstStepFinancials account verification code is 120029. This code will expire in 3 mins. Do not share this code with anyone.",
+    // });//08168902512
+
     // Send notification email
     await sendMail(
       email_address,
       "FirstStep Payments Successful Login",
-      `Dear <strong>${first_name}</strong>,<br><br>You have logged-in successfully to First Step Payments on ${now}.<br><br>If you did not perform this action, please contact support immediately on <a href="mailto:support@firststeppayments.com">support@firststeppayments.com</a>.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
+      getLoginEmailHtml({
+        firstName: first_name,
+        deviceType: deviceType_full,
+        ipAddress: ip,
+        location: '-',
+        dateTime: now
+      })
     );
+
+    // `Dear <strong>${first_name}</strong>,<br><br>You have logged-in successfully to First Step Payments on ${now}.<br><br>If you did not perform this action, please contact support immediately on <a href="mailto:support@firststeppayments.com">support@firststeppayments.com</a>.<br><br>Best regards,<br><strong>First Step Payments Team</strong>`
 
 
     //status
